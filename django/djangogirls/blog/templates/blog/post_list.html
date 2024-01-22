@@ -13,10 +13,8 @@
             <p>Aenean eu leo quam. こんにちは！ よろしくお願いします！ </p>
         </div>
 
-        <div>
-            <p>公開日: 2014/06/14, 12:14</p>
-            <h2><a href="">2番目の投稿</a></h2>
-            <p> こんにちは！ よろしくお願いします！ </p>
-        </div>
+        {% for post in posts %}
+            {{ post }}
+        {% endfor %}
     </body>
 </html>
