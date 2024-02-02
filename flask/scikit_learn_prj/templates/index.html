@@ -7,6 +7,13 @@
     </head>
     <body>
         <h1>{{ header }}</h1>
+        {% with messages = get_flashed_messages() %}
+            {% if messages %}
+                {% for message in messages %}
+                    <p class="flashmsg"><b>{{ message }}</b></p>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
         <table>
             <tr>
                 <th>Name</th>
@@ -24,7 +31,7 @@
             </tr>
         </table>
         <p>
-            "アップロード"リンクを表示 |
+            <a href="/upload" class="upload">アップロード</a>|
             "ダウンロード・削除"リンクを表示
         </p>
         <hr size="5" noshade="" width="600" align="left">
