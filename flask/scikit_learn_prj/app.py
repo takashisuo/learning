@@ -53,5 +53,15 @@ def upload():
         header = 'ファイルアップロード'
         return render_template('upload.html', header=header)
 
+@app.route('/delete/<int:id>')
+def delete(id):
+    delete_data = Data.query.get(id)
+    delete_file = delete_data.file_path
+    db.session.delete(delete_data)
+    db.session.commit()
+    os.remove(delete_file)
+    flash('データを削除しました')
+    return redirect(url_for('index'))
+
 if __name__ == '__main__':
     app.run(debug=True)
