@@ -18,17 +18,27 @@
             <tr>
                 <th>Name</th>
                 <th>Title</th>
-                <th>Upload Date></th>
+                <th>Upload Date</th>
                 <th>Delete</th>
                 <th>Clustering</th>
             </tr>
-            <tr>
-                <td>"name"を表示</td>
-                <td>"title"を表示</td>
-                <td>"date"を表示</td>
-                <td>"削除"リンクを表示</td>
-                <td>"クラスタリング実行"リンクを表示</td>
-            </tr>
+            {% for i in all_data %}
+                <tr>
+                    <td>{{ i.name }}</td>
+                    <td>{{ i.title }}</td>
+                    <td>{{ i.date.date() }}</td>
+                    <td>"削除"リンクを表示</td>
+                    <td>"クラスタリング実行"リンクを表示</td>
+                </tr>
+            {% else %}
+                <tr>
+                    <td>データがありません</td>
+                    <td>データがありません</td>
+                    <td>データがありません</td>
+                    <td>N/A</td>
+                    <td>N/A</td>
+                </tr>
+            {% endfor %}
         </table>
         <p>
             <a href="/upload" class="upload">アップロード</a>|

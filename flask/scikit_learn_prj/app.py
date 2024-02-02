@@ -33,7 +33,8 @@ def initialize_DB():
 @app.route('/')
 def index():
     header = 'クラスタリングアプリケーション'
-    return render_template('index.html', header=header)
+    all_data = Data.query.all()
+    return render_template('index.html', header=header, all_data=all_data)
 
 @app.route('/upload', methods=['GET', 'POST'])
 def upload():
