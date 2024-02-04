@@ -5,6 +5,7 @@ import os
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
 from werkzeug.utils import secure_filename
+from clusterpy import clusterpy
 
 app = Flask(__name__)
 key = os.urandom(13)
@@ -61,6 +62,14 @@ def delete(id):
     db.session.commit()
     os.remove(delete_file)
     flash('データを削除しました')
+    return redirect(url_for('index'))
+
+@app.route('/clustering/<int:id>') # index.htmlから呼ばれて実行されるAPI. API名はhtmlのclass とこちらの def と対応している。
+def clustering(id):
+    data = Data.query.get(id)
+    file_path = data.file_path
+    clusterpy(file_path)
+    flash('処理が完了しました')
     return redirect(url_for('index'))
 
 if __name__ == '__main__':

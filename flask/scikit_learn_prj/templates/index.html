@@ -27,8 +27,8 @@
                     <td>{{ i.name }}</td>
                     <td>{{ i.title }}</td>
                     <td>{{ i.date.date() }}</td>
-                    <td><a href="/delete/{{ i.id}}" class="delete">削除</td>
-                    <td>"クラスタリング実行"リンクを表示</td>
+                    <td><a href="/delete/{{ i.id }}" class="delete">削除</td>
+                    <td><a href="/clustering/{{ i.id }}" class="clustering">クラスタリング実行</td>
                 </tr>
             {% else %}
                 <tr>
