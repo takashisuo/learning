@@ -1,5 +1,6 @@
 from flask import (
-    Flask, render_template, request, flash, redirect, url_for
+    Flask, render_template, request, flash, redirect, url_for,
+    send_from_directory
     )
 import os
 from flask_sqlalchemy import SQLAlchemy
@@ -71,6 +72,22 @@ def clustering(id):
     clusterpy(file_path)
     flash('処理が完了しました')
     return redirect(url_for('index'))
+
+@app.route('/dd')
+def dd():
+    files = os.listdir('download')
+    header = 'ダウンロード・削除'
+    return render_template('dd.html', header=header, files=files)
+
+@app.route('/download/<string:file>')
+def download(file):
+    return send_from_directory('download', file, as_attachment=True)
+
+@app.route('/output_delete/<string:file>')
+def output_delete(file):
+    delete_file_path = 'download/' + file
+    os.remove(delete_file_path)
+    return redirect(url_for('dd'))
 
 if __name__ == '__main__':
     app.run(debug=True)
