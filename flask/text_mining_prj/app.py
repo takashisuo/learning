@@ -1,9 +1,29 @@
 from flask import Flask, render_template, request
 from werkzeug.utils import secure_filename
+from flask_sqlalchemy import SQLAlchemy
+from datetime import datetime
 
 
 app = Flask(__name__)
 
+
+# DB定義
+URI = 'sqlite:///test.db'
+app.config['SQLALCHEMY_DATABASE_URI'] = URI
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+db = SQLAlchemy(app)
+
+class DB(db.Model):
+    __tablename__ = 'test_table'
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(30), unique=True)
+    file_path = db.Column(db.String(64))
+    date = db.Column(db.DateTime, nullable=False, default=datetime.today())
+
+# DB生成
+@app.cli.command('initialize_DB')
+def initialize_DB():
+    db.create_all()
 
 # エラーハンドリング
 @app.errorhandler(404)
