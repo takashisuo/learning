@@ -5,9 +5,50 @@
         <title>index</title>
     </head>
     <body>
+        <div class="flash_message">
+            {% for message in get_flashed_messages() %}
+                <p style="background-color: lightblue;">
+                <b>{{ message }}</b></p>
+            {% endfor %}
+        </div>
         <h1>テキストマイニングツール</h1>
         <a href="/upload">【テキストファイルをアップロードして作成】</a>
         <br>
         <a href="/paste">【テキスト貼付で作成】</a>
+        <table border="1">
+            <tr align="center">
+                <th>ID</th>
+                <th>タイトル</th>
+                <th>ファイルパス</th>
+                <th>登録日</th>
+                <th>ダウンロード</th>
+                <th>削除</th>
+            </tr>
+            {% for i in registration_data %}
+                <tr align="center">
+                    <td>{{ i.id }}</td>
+                    <td>{{ i.title }}</td>
+                    <td>{{ i.file_path }}</td>
+                    <td>{{ i.data.strftime('%Y年%m月%d日') }}</td>
+                    <td>
+                        <form method="POST"
+                            action="{{ url_for('download', file_path=i.file_path)}}">
+                            <input value="ダウンロード" type="submit"
+                             name="download" style="background: darkblue;color: white">
+                        </form>
+                    </td>
+                    <td>
+                        <form method="POST" action="{{ url_for('delete', id=i.id)}}">
+                            <input value="削除" type="submit"
+                             name="delete" style="background: red; color: white">
+                        </form>
+                    </td>
+                </tr>
+            {% else %}
+                <p>何も作成されていません</p>
+            {% endfor %}
+        </table>
+        <br>
+        <a href="/logout">ログアウト</a>
     </body>
 </html>
