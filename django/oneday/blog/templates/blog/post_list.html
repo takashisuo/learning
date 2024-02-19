@@ -3,4 +3,5 @@
 {% for post in object_list %}
     <h2>{{ post.title }}</h2>
     <p>{{ post.content }}</p>
+    <a href="{% url 'post_detail' post.pk %}">続きを読む</a>
 {% endfor %}
