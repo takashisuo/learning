@@ -1,8 +1,15 @@
 {% extends 'blog/base.html' %}
 {% block content %}
 {% for post in posts %}
+    {% if post.is_published or user.is_authenticated %}
     <div class="card w-75 mt-3 mx-auto">
+        {% if post.image %}
+        <img src="{{post.image.url}}" class="card-img-top" alt="{{post.title}}">
+        {% endif %}
         <div class="card-body">
+        {% if not post.is_published %}
+            <span class="badge bg-danger">下書き</span>
+        {% endif %}
             <h2 class="card-title">{{ post.title }}</h2>
             <p class="card-text">{{ post.content | truncatechars:30 }}</p>
             <div class="d-grid gap-2 d-md-flex justify-content-md-end">
@@ -10,5 +17,6 @@
             </div>
         </div>
     </div>
+    {% endif %}
 {% endfor %}
 {% endblock content %}
