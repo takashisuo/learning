@@ -1,4 +1,9 @@
-<h1>{{post.title}}</h1>
-<p>{{post.updated_at|date}}</p>
-<hr>
-<p>{{post.content}}</p>
+{% extends 'blog/base.html' %}
+{% block content %}
+<div class="mt-3">
+    <h1>{{post.title}}</h1>
+    <p>更新日：{{post.updated_at | date}}</p>
+    <hr>
+    <p>{{post.content}}</p>
+</div>
+{% endblock content %}

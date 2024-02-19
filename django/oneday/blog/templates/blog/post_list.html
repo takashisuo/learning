@@ -1,7 +1,14 @@
-<h1>ブログ一覧</h1>
-<hr>
-{% for post in object_list %}
-    <h2>{{ post.title }}</h2>
-    <p>{{ post.content }}</p>
-    <a href="{% url 'post_detail' post.pk %}">続きを読む</a>
+{% extends 'blog/base.html' %}
+{% block content %}
+{% for post in posts %}
+    <div class="card w-75 mt-3 mx-auto">
+        <div class="card-body">
+            <h2 class="card-title">{{ post.title }}</h2>
+            <p class="card-text">{{ post.content | truncatechars:30 }}</p>
+            <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                <a href="{% url 'post_detail' post.pk %}" class="btn btn-dark">続きを読む</a>
+            </div>
+        </div>
+    </div>
 {% endfor %}
+{% endblock content %}
