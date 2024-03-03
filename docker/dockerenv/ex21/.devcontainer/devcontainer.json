@@ -1,0 +1,16 @@
+{
+    "name": "Python Basic Project",
+    "dockerComposeFile": "compose.yml",
+    "service": "python",
+    "workspaceFolder": "/tmp/work",
+    "customizations": {
+      "vscode": {
+        "extensions": [
+          "ms-python.python"
+        ],
+        "settings": {
+          "editor.tabSize": 2
+        }
+      }
+    }
+  }
