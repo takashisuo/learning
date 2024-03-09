@@ -1,0 +1,22 @@
+{
+    "name": "python",
+    "dockerComposeFile": "docker-compose.yml",
+    "service": "workspace",
+    "workspaceFolder": "/DockerIntro/appendix2",
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "ms-python.python",
+                "ms-toolsai.jupyter"
+            ],
+            "settings": {
+                "workbench.colorCustomizations": {
+                    "titleBar.activeBackground": "#19549C",
+                    "titleBar.activeForeground": "#ffffff",
+                    "activityBar.background": "#02A7E3",
+                    "activityBar.foreground": "#ffffff"
+                }
+            }
+        }
+    }
+}

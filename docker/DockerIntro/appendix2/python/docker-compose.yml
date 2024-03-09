@@ -1,5 +1,0 @@
-services:
-  python:
-    build: .
-    volumes:
-      - .:src
