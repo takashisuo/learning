@@ -12,6 +12,32 @@ import numpy as np
 import os
 import optuna
 from abc import ABC, abstractmethod
+import mlflow
+import traceback
+
+class MlflowSettings:
+
+    def __init__(self, exp_name):
+        self.experiment_name = exp_name
+        self.experiment_id = None
+        self.client = None
+
+    def set_experiment(self):
+        experiment_name = self.experiment_name
+        self.client = mlflow.tracking.MlflowClient(tracking_uri=mlflow.get_tracking_uri())
+        for exp in self.client.search_experiments():
+            if experiment_name == exp.name:
+                self.experiment_id = exp.experiment_id
+                break
+        else:
+            self.experiment_id = self.client.create_experiment(experiment_name)
+
+    def mlflow_callback(self, study, trial):
+        trial_value = trial.value if trial.value is not None else float("nan")
+        with mlflow.start_run(experiment_id=self.experiment_id, run_name=study.study_name):
+            mlflow.log_params(trial.params)
+            mlflow.log_metric("accuracy", trial_value)
+
 
 class BaseModel(ABC):
 
@@ -36,25 +62,36 @@ class BaseModel(ABC):
     def predict(self):
         pass
 
+    @abstractmethod
+    def evaluate(self):
+        pass
+
     def _visualize(self, params:dict, study, output_dir:str='./image'):
         print('Hyper parameter importance:')
         search_params: list = list(params.keys())
-        importances = optuna.importance.get_param_importances(
-            study=study,
-            params=search_params)
-        for k, v in importances.items():
-            print(f'{k}: {v}')
-
-        # .show()をおこなうとその場で可視化する。jupyterの場合は.show()のほうも利用を検討すべき。
-        fig = optuna.visualization.plot_param_importances(study)
-        if not os.path.exists(output_dir):
-            os.makedirs(output_dir)
-        fig.write_html(f'{output_dir}/param_importance.html')
-        fig.write_image(f'{output_dir}/param_importance.png')
+        print(f"params:{search_params}")
+        try:
+            importances = optuna.importance.get_param_importances(
+                study=study,
+                params=search_params)
+            for k, v in importances.items():
+                print(f'{k}: {v}')
+            
+            # .show()をおこなうとその場で可視化する。jupyterの場合は.show()のほうも利用を検討すべき。
+            fig = optuna.visualization.plot_param_importances(study)
+            if not os.path.exists(output_dir):
+                os.makedirs(output_dir)
+            fig.write_html(f'{output_dir}/param_importance.html')
+            fig.write_image(f'{output_dir}/param_importance.png')
+        except Exception as e:
+            print(f"unexpected error occurred.{traceback.print_exc()}")
 
 class OptunaLogisticRegression(BaseModel):
 
     def __init__(self, train_x:np.array, train_y:np.array, test_x:np.array, test_y:np.array):
+        mlflow_settings = MlflowSettings('optuna_lr_sample')
+        mlflow_settings.set_experiment()
+        self.mlflow_settings = mlflow_settings
         super().__init__(train_x, train_y, test_x, test_y)
         self.best_params = None
 
@@ -81,9 +118,9 @@ class OptunaLogisticRegression(BaseModel):
         # create_study: 目的関数の最適化
         # 精度によってmaximize/minimizeを変更する.
         # RMSEなどはminimize
-        study = optuna.create_study(direction='maximize')
+        study = optuna.create_study(direction='maximize', study_name='LogisticRegression')
         # n_trials: 試行回数を定義する。第一引数はobjectiveメソッドを指定する。
-        study.optimize(objective, n_trials=10)
+        study.optimize(objective, n_trials=10, callbacks=[self.mlflow_settings.mlflow_callback])
         # 探索結果はstudyに格納される。
         self.best_params = study.best_params
         print(f"study.best_params:{study.best_params}")
@@ -100,13 +137,36 @@ class OptunaLogisticRegression(BaseModel):
     def predict(self):
         test_x = self.scaler.transform(self.test_x)
         pred = self.model.predict(test_x)
-        accuracy = accuracy_score(self.test_y, pred)
-        print(f"LR: Optuna average score: {accuracy:.3f}")
+        self.accuracy = accuracy_score(self.test_y, pred)
+        print(f"LR: Optuna average score: {self.accuracy:.3f}")
+
+    def evaluate(self):
+        last_mlflow = MlflowSettings('best_params_lr')
+        last_mlflow.set_experiment()
+        with mlflow.start_run(experiment_id=last_mlflow.experiment_id, run_name='lr') as run:
+            mlflow.log_params(self.best_params)
+            mlflow.log_metric('accuracy', self.accuracy)
+            mlflow.lightgbm.log_model(self.model, artifact_path='lr-model')
+
+            name = 'LogisticRegression'
+            tags = {'data': 'iris'}
+            try:
+                last_mlflow.client.get_registered_model(name)
+            except:
+                last_mlflow.client.create_registered_model(name)
+
+            run_id = run.info.run_id
+            model_uri = "runs:/{}/logistic-regression-model".format(run_id)
+            mv = last_mlflow.client.create_model_version(name, model_uri, run_id, tags=tags)
+            print("model version {} created".format(mv.version))
 
 
-class OptunaLGbMClassifier(BaseModel):
+class OptunaLGBMClassifier(BaseModel):
 
     def __init__(self, train_x:np.array, train_y:np.array, test_x:np.array, test_y:np.array):
+        mlflow_settings = MlflowSettings('optuna_lgbm_sample')
+        mlflow_settings.set_experiment()
+        self.mlflow_settings = mlflow_settings
         super().__init__(train_x, train_y, test_x, test_y)
         self.best_params = None
 
@@ -114,7 +174,7 @@ class OptunaLGbMClassifier(BaseModel):
 
         def objective(trial):
             params = {
-                'num_leaves': trial.suggest_int('num_leaves', 5, 100),
+                'num_leaves': trial.suggest_int('num_leaves', 2, 100),
                 'min_child_weight': trial.suggest_uniform('min_child_weight', 0.001, 0.1),
                 'min_child_samples': trial.suggest_int('min_child_samples', 5, 100),
             }
@@ -125,9 +185,9 @@ class OptunaLGbMClassifier(BaseModel):
             accuracy = score.mean()
             return accuracy
         
-        study = optuna.create_study(direction='maximize')
+        study = optuna.create_study(direction='maximize', study_name='LightGBMClassifier')
         # n_trials: 試行回数を定義する。第一引数はobjectiveメソッドを指定する。
-        study.optimize(objective, n_trials=100)
+        study.optimize(objective, n_trials=10, callbacks=[self.mlflow_settings.mlflow_callback])
         # 探索結果はstudyに格納される。
         self.best_params = study.best_params
         print(f"study.best_params:{study.best_params}")
@@ -145,6 +205,9 @@ class OptunaLGbMClassifier(BaseModel):
         accuracy = accuracy_score(self.test_y, pred)
         print(f"LGBM: Optuna average score: {accuracy:.3f}")
 
+    def evaluate(self):
+        print("skip")
+
     def _cross_val_score(self, model, X: np.array, y: np.array) -> np.array:
         acc = np.array([])
         cv = StratifiedKFold(n_splits=3, random_state=42, shuffle=True)
@@ -161,18 +224,17 @@ class OptunaLGbMClassifier(BaseModel):
             acc = np.append(acc, ac)
         return acc
 
-
 def main():
     iris = load_iris()
     train_x, test_x, train_y, test_y = train_test_split(iris.data, iris.target, test_size=0.25, random_state=42, stratify=iris.target)
-
-    lgbm_model: BaseModel = OptunaLGbMClassifier(train_x, train_y, test_x, test_y)
+    lgbm_model: BaseModel = OptunaLGBMClassifier(train_x, train_y, test_x, test_y)
     logistic_model: BaseModel = OptunaLogisticRegression(train_x, train_y, test_x, test_y)
     models = [lgbm_model, logistic_model]
     for m in models:
         m.search_best_params()
         m.train()
         m.predict()
+        m.evaluate()
 
 if __name__ == '__main__':
     main()
