@@ -115,7 +115,7 @@ class OptunaLGbMClassifier(BaseModel):
         def objective(trial):
             params = {
                 'num_leaves': trial.suggest_int('num_leaves', 5, 100),
-                #'min_child_weight': trial.suggest_uniform('min_child_weight', 0.001, 0.1),
+                'min_child_weight': trial.suggest_uniform('min_child_weight', 0.001, 0.1),
                 'min_child_samples': trial.suggest_int('min_child_samples', 5, 100),
             }
             # verbose=-1を指定しないと`No further splits with positive gain, best gain: -inf`というWarningが表示される
@@ -159,7 +159,6 @@ class OptunaLGbMClassifier(BaseModel):
             pred_y = model.predict(valid_x)
             ac = accuracy_score(valid_y, pred_y)
             acc = np.append(acc, ac)
-        print(acc)
         return acc
 
 
