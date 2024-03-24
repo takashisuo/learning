@@ -49,6 +49,8 @@ class BaseModel(ABC):
         self.model = None
         self.scaler = StandardScaler()
         self.scaler.fit(self.train_x)
+        self.accuracy = None
+        self.output_importance_path = None
 
     @abstractmethod
     def search_best_params(self):
@@ -58,13 +60,18 @@ class BaseModel(ABC):
     def train(self):
         pass
 
-    @abstractmethod
     def predict(self):
-        pass
+        pred = self.model.predict(self.test_x)
+        self.accuracy = accuracy_score(self.test_y, pred)
+        print(f"LGBM: Optuna average score: {self.accuracy:.3f}")
 
     @abstractmethod
     def evaluate(self):
         pass
+
+    def cleanup(self):
+        if not self.output_importance_path and os.path.isdir(self.output_importance_path):
+            self.output_importance_path.cleanup()
 
     def _visualize(self, params:dict, study, output_dir:str='./image'):
         print('Hyper parameter importance:')
@@ -83,17 +90,42 @@ class BaseModel(ABC):
                 os.makedirs(output_dir)
             fig.write_html(f'{output_dir}/param_importance.html')
             fig.write_image(f'{output_dir}/param_importance.png')
+            print(f"saved: {output_dir}")
         except Exception as e:
             print(f"unexpected error occurred.{traceback.print_exc()}")
+
+    def _create_evaluate_values(self, exp_name: str, total_name: str, saved_path: str):
+        last_mlflow = MlflowSettings(f'best_params_{exp_name}')
+        last_mlflow.set_experiment()
+        with mlflow.start_run(experiment_id=last_mlflow.experiment_id, run_name=exp_name) as run:
+            mlflow.log_params(self.best_params)
+            mlflow.log_metric('accuracy', self.accuracy)
+            mlflow.lightgbm.log_model(self.model, artifact_path=f'{exp_name}-model')
+            mlflow.log_artifact(f"{saved_path}/param_importance.png")
+
+            # mlflow > models への登録処理
+            name = total_name
+            tags = {'data': 'iris'}
+            try:
+                last_mlflow.client.get_registered_model(name)
+            except:
+                last_mlflow.client.create_registered_model(name)
+
+            run_id = run.info.run_id
+            model_uri = "runs:/{}/{}".format(run_id, total_name)
+            mv = last_mlflow.client.create_model_version(name, model_uri, run_id, tags=tags)
+            print("model version {} created".format(mv.version))
 
 class OptunaLogisticRegression(BaseModel):
 
     def __init__(self, train_x:np.array, train_y:np.array, test_x:np.array, test_y:np.array):
+        super().__init__(train_x, train_y, test_x, test_y)
         mlflow_settings = MlflowSettings('optuna_lr_sample')
         mlflow_settings.set_experiment()
         self.mlflow_settings = mlflow_settings
-        super().__init__(train_x, train_y, test_x, test_y)
         self.best_params = None
+        self.output_importance_path = tempfile.TemporaryDirectory().name
+        print(f"tempdir: {self.output_importance_path}")
 
     def search_best_params(self):
 
@@ -127,7 +159,7 @@ class OptunaLogisticRegression(BaseModel):
         print(f"study.best_value:{study.best_value}")
 
         # 以下でハイパーパラメータの重要度を算出できる。
-        self._visualize(self.best_params, study, output_dir='./image_lr')
+        self._visualize(self.best_params, study, output_dir=self.output_importance_path)
 
     def train(self):
         self.model = LogisticRegression(random_state=42, **self.best_params)
@@ -135,40 +167,21 @@ class OptunaLogisticRegression(BaseModel):
         self.model.fit(train_x, self.train_y)
 
     def predict(self):
-        test_x = self.scaler.transform(self.test_x)
-        pred = self.model.predict(test_x)
-        self.accuracy = accuracy_score(self.test_y, pred)
-        print(f"LR: Optuna average score: {self.accuracy:.3f}")
+       super().predict()
 
     def evaluate(self):
-        last_mlflow = MlflowSettings('best_params_lr')
-        last_mlflow.set_experiment()
-        with mlflow.start_run(experiment_id=last_mlflow.experiment_id, run_name='lr') as run:
-            mlflow.log_params(self.best_params)
-            mlflow.log_metric('accuracy', self.accuracy)
-            mlflow.lightgbm.log_model(self.model, artifact_path='lr-model')
-
-            name = 'LogisticRegression'
-            tags = {'data': 'iris'}
-            try:
-                last_mlflow.client.get_registered_model(name)
-            except:
-                last_mlflow.client.create_registered_model(name)
-
-            run_id = run.info.run_id
-            model_uri = "runs:/{}/logistic-regression-model".format(run_id)
-            mv = last_mlflow.client.create_model_version(name, model_uri, run_id, tags=tags)
-            print("model version {} created".format(mv.version))
-
+        self._create_evaluate_values('lr', 'LogisticRegression', self.output_importance_path)
 
 class OptunaLGBMClassifier(BaseModel):
 
     def __init__(self, train_x:np.array, train_y:np.array, test_x:np.array, test_y:np.array):
+        super().__init__(train_x, train_y, test_x, test_y)
         mlflow_settings = MlflowSettings('optuna_lgbm_sample')
         mlflow_settings.set_experiment()
         self.mlflow_settings = mlflow_settings
-        super().__init__(train_x, train_y, test_x, test_y)
         self.best_params = None
+        self.output_importance_path = tempfile.TemporaryDirectory().name
+        print(f"tempdir: {self.output_importance_path}")
 
     def search_best_params(self):
 
@@ -194,19 +207,17 @@ class OptunaLGBMClassifier(BaseModel):
         print(f"study.best_value:{study.best_value}")
 
         # 以下でハイパーパラメータの重要度を算出できる。
-        self._visualize(self.best_params, study, output_dir='./image_lgbm')
+        self._visualize(self.best_params, study, output_dir=self.output_importance_path)
 
     def train(self):
         self.model = lgb.LGBMClassifier(random_state=42, verbose=-1, **self.best_params)
         self.model.fit(self.train_x, self.train_y)
 
     def predict(self):
-        pred = self.model.predict(self.test_x)
-        accuracy = accuracy_score(self.test_y, pred)
-        print(f"LGBM: Optuna average score: {accuracy:.3f}")
+       super().predict()
 
     def evaluate(self):
-        print("skip")
+        self._create_evaluate_values('lgbm', 'LightGBMClassifier', self.output_importance_path)
 
     def _cross_val_score(self, model, X: np.array, y: np.array) -> np.array:
         acc = np.array([])
@@ -231,10 +242,13 @@ def main():
     logistic_model: BaseModel = OptunaLogisticRegression(train_x, train_y, test_x, test_y)
     models = [lgbm_model, logistic_model]
     for m in models:
-        m.search_best_params()
-        m.train()
-        m.predict()
-        m.evaluate()
+        try:
+            m.search_best_params()
+            m.train()
+            m.predict()
+            m.evaluate()
+        finally:
+            m.cleanup()
 
 if __name__ == '__main__':
     main()
