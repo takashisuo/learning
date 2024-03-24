@@ -1,7 +1,9 @@
 from sklearn.linear_model import LogisticRegression
-from sklearn.model_selection import cross_val_score
+from sklearn.model_selection import cross_val_score, StratifiedKFold
 from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score
 from sklearn.datasets import load_iris
+from sklearn.preprocessing import StandardScaler
 import numpy as np
 import os
 import optuna
@@ -15,6 +17,8 @@ class BaseModel(ABC):
         self.test_x = test_x
         self.test_y = test_y
         self.model = None
+        self.scaler = StandardScaler()
+        self.scaler.fit(self.train_x)
 
     @abstractmethod
     def search_best_params(self):
@@ -39,11 +43,13 @@ class StandardLogisticRegression(BaseModel):
     def train(self):
         # 違いを見るためにCに想定外の値を設定する
         self.model = LogisticRegression(random_state=42, C=1e-4)
-        self.model.fit(self.train_x, self.train_y)
+        train_x = self.scaler.transform(self.train_x)
+        self.model.fit(train_x, self.train_y)
 
     def predict(self):
-        scores = cross_val_score(self.model, self.test_x, self.test_y, cv=3)
-        accuracy = scores.mean()
+        test_x = self.scaler.transform(self.test_x)
+        pred = self.model.predict(test_x)
+        accuracy = accuracy_score(self.test_y, pred)
         print(f"Standard average score: {accuracy:.3f}")
 
 
@@ -66,7 +72,9 @@ class OptunaLogisticRegression(BaseModel):
                 'max_iter': trial.suggest_int('max_iter', 500, 2000, step=100)
             }
             model = LogisticRegression(**params)
-            score = cross_val_score(model, self.train_x, self.train_y, cv=3)
+            sk = StratifiedKFold(n_splits=3)
+            train_x = self.scaler.transform(self.train_x)
+            score = cross_val_score(model, train_x, self.train_y, cv=sk)
             accuracy = score.mean()
 
             return accuracy
@@ -102,18 +110,20 @@ class OptunaLogisticRegression(BaseModel):
         fig.write_image(f'{output_dir}/param_importance.png')
 
     def train(self):
+        train_x = self.scaler.transform(self.train_x)
         self.model = LogisticRegression(random_state=42, **self.best_params)
-        self.model.fit(self.train_x, self.train_y)
+        self.model.fit(train_x, self.train_y)
 
     def predict(self):
-        scores = cross_val_score(self.model, self.test_x, self.test_y, cv=3)
-        accuracy = scores.mean()
+        test_x = self.scaler.transform(self.test_x)
+        pred = self.model.predict(test_x)
+        accuracy = accuracy_score(self.test_y, pred)
         print(f"Optuna average score: {accuracy:.3f}")
 
     
 def main():
     iris = load_iris()
-    train_x, test_x, train_y, test_y = train_test_split(iris.data, iris.target, test_size=0.25, random_state=42)
+    train_x, test_x, train_y, test_y = train_test_split(iris.data, iris.target, test_size=0.25, random_state=42, stratify=iris.target)
 
     std_model: BaseModel = StandardLogisticRegression(train_x, train_y, test_x, test_y)
     optuna_model: BaseModel = OptunaLogisticRegression(train_x, train_y, test_x, test_y)
