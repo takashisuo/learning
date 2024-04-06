@@ -35,19 +35,25 @@ def tabs_set(data: pd.DataFrame):
     with tabs[1]:
         if st.checkbox("plot"):
             if 'loaded' not in ss:
-                st.write("start")
-                group_labels = ["target"]
-                # Create distplot with custom bin_size
-                figs = []
-                for i in range(0, len(data.columns)):
-                    st.write(f"col:{data.columns[i]}")
-                    fig = ff.create_distplot(
-                            [data.iloc[:, i].values], group_labels, bin_size=0.25)
+                option = st.selectbox(
+                    '目的変数を選択してください.',
+                    data.columns,
+                    index=None
+                )
+                if option is not None:                    
+                    st.write(f"start:{option}")
+                    group_labels = [option]
+                    # Create distplot with custom bin_size
+                    figs = []
+                    for i in range(0, len(data.columns)):
+                        st.write(f"{data.columns[i]}")
+                        fig = ff.create_distplot(
+                                [data.iloc[:, i].values], group_labels, bin_size=0.25)
 
-                    # Plot
-                    st.plotly_chart(fig, use_container_width=True)
-                    figs.append(fig)
-                ss["loaded"] = figs
+                        # Plot
+                        st.plotly_chart(fig, use_container_width=True)
+                        figs.append(fig)
+                    ss["loaded"] = figs
                 
             else:
                 st.write("loaded")
@@ -59,15 +65,18 @@ def tabs_set(data: pd.DataFrame):
         if st.checkbox('SHAP解析', help='「実験点の提案」タブでモデルを構築してから'):
             st.write("start shap")
             if 'loaded_shap' not in ss:
-                st.write("loaded_shap")
+                st.write("start_shap")
                 clf = RandomForestClassifier(max_depth=2, random_state=0)
                 X = data.iloc[:, :-1]
                 y = data.iloc[:, -1]
                 clf.fit(X, y)
                 SHAP_explain(clf, X, X)
-                ss["loaded_shap"] = True
+                ss["loaded_shap"] = clf
+                ss['shap_data'] = X
             else:
                 st.write("loaded")
+                SHAP_explain(ss['loaded_shap'], ss['shap_data'], ss['shap_data'])
+
                 
 
 
