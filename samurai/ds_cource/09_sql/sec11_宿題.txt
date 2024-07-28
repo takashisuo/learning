@@ -1,0 +1,17 @@
+* 準備(前節と同じなのでskip可)
+    1. テーブル作成
+        lesson dbに以下のデータが格納された状態にしてください。
+        テーブル名はusers_exeとしてください。
+        1-1. 100ユーザー
+        https://drive.google.com/file/d/1sI6P1pGYnrEf3pNyknunxRsxPzjPCHug/view?usp=sharing
+        カラム定義はlesson#usersテーブルと同じです
+
+
+users_exeテーブルに対して以下を満たすクエリーを作成してください
+git: sql-basic-kadaiのpractice11にクエリーと結果を格納してください。
+
+* 演習1
+    ageが30歳以上の結果のレコード数をCOUNTを使って表現してください
+
+* 演習2
+    ageの最大値・最小値・平均値・合計値を算出するクエリーを作成してください

@@ -1,0 +1,33 @@
+* 準備
+    1. テーブル作成
+        lesson dbに以下のデータが格納された状態にしてください。
+        テーブル名はusers_exeとしてください。
+        1-1. 100ユーザー
+        https://drive.google.com/file/d/1sI6P1pGYnrEf3pNyknunxRsxPzjPCHug/view?usp=sharing
+        カラム定義はlesson#usersテーブルと同じです
+
+    2. 以下のデータを格納したテーブルusers_score_exeを作成してください。
+        カラムは以下で作成してください。
+        emp_name: varchar
+        id: PRI, int
+        kamoku: PRI, varchar
+        score: int
+        test_date: PRI, datetime
+        https://drive.google.com/file/d/1rgv1Iilx9BcqM2TaADZEQeRTNcCtT1GU/view?usp=sharing
+
+
+* 演習1
+    users_exeとusers_score_exeをinner joinで結合してください
+
+* 演習2
+    users_exeとusers_score_exeをleft outer joinで結合してください
+
+* 演習3
+    演習2の続き
+    結合したテーブルをカウントしてください
+
+* 演習4
+    演習2の続き
+    結合したテーブルをふりがな毎に平均点を算出してください
+
+* 
