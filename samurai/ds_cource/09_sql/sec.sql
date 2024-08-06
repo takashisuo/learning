@@ -1,0 +1,1 @@
+SELECT * FROM dummy_users WHERE id = 1

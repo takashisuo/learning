@@ -1,9 +1,11 @@
-* 準備(前節と同じなのでskip可)
+* 準備
     1. テーブル作成
         lesson dbに以下のデータが格納された状態にしてください。
         テーブル名はusers_exeとしてください。
         1-1. 100ユーザー
-        https://drive.google.com/file/d/1sI6P1pGYnrEf3pNyknunxRsxPzjPCHug/view?usp=sharing
+        (utf8) https://drive.google.com/file/d/1sI6P1pGYnrEf3pNyknunxRsxPzjPCHug/view?usp=sharing
+        または
+        (sjis) https://drive.google.com/file/d/1uWNq37U49axqoKa6L9jy5wkqq3peSahf/view?usp=sharing
         カラム定義はlesson#usersテーブルと同じです
 
 users_exeテーブルに対して以下を満たすクエリーを作成してください
