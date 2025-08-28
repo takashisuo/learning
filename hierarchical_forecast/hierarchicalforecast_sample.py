@@ -254,6 +254,7 @@ print(f"\nベース予測結果の形状: {Y_hat_df.shape}")
 print("ベース予測の最初の5行:")
 print(Y_hat_df.head())
 
+#%%
 print("\n=== 4. 階層調整（Reconciliation）の実行 ===")
 # Reconcile the base predictions
 reconcilers = [
@@ -280,6 +281,7 @@ Y_rec_df = hrec.reconcile(Y_hat_df=Y_hat_df, Y_df=Y_train_df,
 print(f"\n調整後予測結果の形状: {Y_rec_df.shape}")
 print("調整後予測の列名:", Y_rec_df.columns.tolist())
 
+#%%
 print("\n=== 5. 予測結果の詳細表示 ===")
 # まず実際の列名を確認
 print("調整後予測データの実際の列名:")
