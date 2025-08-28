@@ -56,3 +56,19 @@ class NeuralProphetForecastProxy(ForecastProxy):
         pass
 
 
+class StatsForecastProxy(ForecastProxy):
+    def __init__(self):
+        # statsforecastモデルの初期化
+        pass
+
+    def fit(self, Y_df, S_df, Exog_df=None):
+        # statsforecastモデルの学習を実装
+        pass
+
+    def predict(self, future_df, Exog_df=None):
+        # statsforecastモデルの予測を実装
+        pass
+
+    def evaluate(self, Y_df, S_df, Exog_df=None):
+        # statsforecastモデルの評価を実装
+        pass
