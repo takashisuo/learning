@@ -76,7 +76,7 @@ def create_hierarchical_forecast_sample_data():
             y_data_list.append({
                 'unique_id': unique_id,
                 'ds': dates[i],
-                'y': max(0, value)  # 負の値を避ける
+                'y': max(0, value),  # 負の値を避ける
             })
     
     Y_df = pd.DataFrame(y_data_list)
@@ -121,8 +121,8 @@ def create_hierarchical_forecast_sample_data():
     # tagsの作成（階層レベルの定義）
     tags = {
         '合計': ['合計'],
-        'Region': ['東日本マケ', '西日本マケ'],
-        'Region/Product': ['東日本マケ_支社A', '東日本マケ_支社B', '西日本マケ_支社C', '西日本マケ_支社D']
+        'マケ': ['東日本マケ', '西日本マケ'],
+        'マケ/支社': ['東日本マケ_支社A', '東日本マケ_支社B', '西日本マケ_支社C', '西日本マケ_支社D']
     }
     
     print(f"時系列データの形状: {Y_df.shape}")
@@ -208,13 +208,19 @@ def create_hierarchical_forecast_sample_data_with_exog():
 
     print("\n将来予測用データセットの最初の5行:")
     print(future_df.head())
+    
+    print(f"全データセットの形状")
+    print(f"  Y_df_with_exog: {Y_df_with_exog.shape}")
+    print(f"  S_df: {S_df.shape}")
+    print(f"  Exog_df: {Exog_df.shape}")
+    print(f"  future_df: {future_df.shape}")
 
     return Y_df_with_exog, S_df, tags, Exog_df, future_df
 
 # 関数を実行して結果を確認
-#Y_df, S_df, tags, Exog_df, future_df = create_hierarchical_forecast_sample_data_with_exog()
+Y_df, S_df, tags, Exog_df, future_df = create_hierarchical_forecast_sample_data_with_exog()
 
-Y_df, S_df, tags = create_hierarchical_forecast_sample_data()
+#Y_df, S_df, tags = create_hierarchical_forecast_sample_data()
 print(f"Y_dfの形状: {Y_df.shape}")
 try:
     display(Y_df.head())
@@ -248,7 +254,7 @@ print("使用モデル:")
 print("  - AutoARIMA: 自動でARIMAパラメータを選択")
 print("  - Naive: 前期の値をそのまま予測値とする")
 
-Y_hat_df = fcst.forecast(df=Y_train_df, h=4)
+Y_hat_df = fcst.forecast(df=Y_train_df, X_df=future_df, h=4)
 
 print(f"\nベース予測結果の形状: {Y_hat_df.shape}")
 print("ベース予測の最初の5行:")
@@ -260,14 +266,14 @@ print("\n=== 4. 階層調整（Reconciliation）の実行 ===")
 reconcilers = [
     BottomUp(),  # ボトムアップ: 最下位レベルの予測を集約
     TopDown(method='forecast_proportions'),  # トップダウン: 最上位レベルから比例配分
-    # MiddleOut(middle_level='Region',  # ミドルアウト: 中間レベル（Region）から上下に展開
+    # MiddleOut(middle_level='マケ',  # ミドルアウト: 中間レベル（マケ）から上下に展開
     #           top_down_method='forecast_proportions')
 ]
 
 print("使用する調整手法:")
 print("  1. BottomUp: 最下位レベル(個別系列)の予測値を上位レベルに集約")
 print("  2. TopDown: 最上位レベルの予測を下位レベルに比例配分")
-# print("  3. MiddleOut: 中間レベル(Region)から上下に展開")
+# print("  3. MiddleOut: 中間レベル(マケ)から上下に展開")
 print("  注意: MiddleOutは一時的に無効化（デバッグのため）")
 
 print(f"\nデバッグ情報:")
@@ -402,10 +408,11 @@ print("生成されたデータの特徴:")
 print("  - 期間: 2019年Q1〜2023年Q4（5年間、20四半期）")
 print("  - 階層構造:")
 print("    * Level 1 (合計): 全体")
-print("    * Level 2 (Region): 東日本マケ, 西日本マケ")
-print("    * Level 3 (Region/Product): 東日本マケ_支社A, 東日本マケ_支社B, 西日本マケ_支社C, 西日本マケ_支社D")
+print("    * Level 2 (マケ): 東日本マケ, 西日本マケ")
+print("    * Level 3 (マケ/支社): 東日本マケ_支社A, 東日本マケ_支社B, 西日本マケ_支社C, 西日本マケ_支社D")
 print("  - データ特性:")
 print("    * 季節性: 四半期パターン")
 print("    * トレンド: 各系列で異なる成長率")
 print("    * ノイズ: 適度なランダムな変動")
 print("    * 階層制約: 下位レベルの合計が上位レベルと一致")
+# %%
