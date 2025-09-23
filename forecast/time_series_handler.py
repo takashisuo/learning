@@ -2,9 +2,15 @@ from prophet import Prophet
 import numpy as np
 import joblib
 import pandas as pd
-
+import optuna
+import logging
 from sklearn.metrics import mean_squared_error, mean_absolute_error, mean_absolute_percentage_error
 from pmdarima.model_selection import train_test_split
+from sklearn.model_selection import TimeSeriesSplit
+
+logging.getLogger("prophet").setLevel(logging.WARNING)
+logging.getLogger("cmdstanpy").setLevel(logging.WARNING)
+
 
 import matplotlib.pyplot as plt
 # 抽象クラスのインポート
@@ -111,6 +117,92 @@ class ProphetTrainingHandler(TimeSeriesAbstractHandler):
         
         self.forecast = self._model.predict(future)
         return self.forecast
+    
+    def tune_hyperparameters(
+            self,
+            df: pd.DataFrame,
+            test_size: int = 12,
+            val_size: int = 12,
+            n_trials: int = 100,
+            n_jobs: int = -1,
+            freq: str = "M",
+            params: dict = None
+        ) -> dict:
+        """
+        OptunaでProphetのハイパーパラメータ探索を行い、最適パラメータを返す。
+
+        Returns:
+            dict: 最適パラメータ {'changepoint_prior_scale': ..., 'seasonality_prior_scale': ...}
+        """
+        train_df, test_df = train_test_split(df, test_size=test_size)
+        self._train = train_df
+        self._test = test_df
+
+        def objective(trial):
+
+            if params is None:
+                optuna_params = {
+                    'changepoint_prior_scale': trial.suggest_float('changepoint_prior_scale', 0.001, 0.5),
+                    'seasonality_prior_scale': trial.suggest_float('seasonality_prior_scale', 0.01, 10.0),
+                    'seasonality_mode': trial.suggest_categorical('seasonality_mode', ['additive', 'multiplicative']),
+                    'changepoint_range': trial.suggest_float('changepoint_range', 0.8, 0.95, step=0.001),
+                    'n_changepoints': trial.suggest_int('n_changepoints', 20, 35)
+                }
+            else:
+                optuna_params = params
+
+            tss = TimeSeriesSplit(test_size=val_size)
+            cv_mse = []
+
+            for fold, (train_index, val_index) in enumerate(tss.split(train_df)):
+
+                train_data = train_df.iloc[train_index]
+                val_data = train_df.iloc[val_index]
+            
+                model = Prophet(
+                    **optuna_params
+                )
+
+                for col in self.exog_cols:
+                    model.add_regressor(col)
+
+                model.fit(train_data)
+
+                future = model.make_future_dataframe(periods=len(val_data), freq=freq)
+                if self.exog_cols:
+                    future = future.merge(val_data[self.exog_cols + ['ds']], on='ds', how='left')
+
+                forecast = model.predict(future)
+                preds = forecast.tail(len(val_data))['yhat'].values
+                val_mse = mean_squared_error(val_data['y'].values, preds)
+                cv_mse.append(val_mse)
+
+            return np.mean(cv_mse)
+
+        optuna.logging.disable_default_handler()
+        study = optuna.create_study(direction='minimize')
+        study.optimize(objective, n_trials=n_trials, n_jobs=n_jobs)
+
+        self.best_params = study.best_params
+        print(f"Best params: {self.best_params}")
+        return self.best_params
+    
+    def build_best_model(self, params: dict):
+        """
+        tune_hyperparametersで探索済みの最適パラメータを使って学習済みモデルを作成。
+        """
+        if not hasattr(self, 'best_params'):
+            raise ValueError("Best params not found. Run tune_hyperparameters first.")
+
+        self._model = Prophet(
+            **params
+        )
+        if self.exog_cols:
+            for col in self.exog_cols:
+                self._model.add_regressor(col)
+
+        self.fit(self._train)
+        return self._model
 
     def evaluate(
             self,
@@ -124,11 +216,14 @@ class ProphetTrainingHandler(TimeSeriesAbstractHandler):
         if 'ds' not in df.columns or 'y' not in df.columns:
             raise ValueError("DataFrame must contain 'ds' and 'y' columns.")
         
-        train, test = train_test_split(df, test_size=test_size)
-        self._train = train
-        self._test = test
+        if self._train is None or self._test is None:
+            train, test = train_test_split(df, test_size=test_size)
+            self._train = train
+            self._test = test
+        else:
+            train = self._train
+            test = self._test
 
-        self.fit(train)
         test_forecast: pd.DataFrame = self.predict(
             periods=test_size,
             freq=freq,
@@ -189,12 +284,13 @@ class ProphetTrainingHandler(TimeSeriesAbstractHandler):
         return self._train
 
 class ProphetProductHandler(TimeSeriesAbstractHandler):
-    def __init__(self, exog_cols=None):
+    def __init__(self, exog_cols=None, model_params: dict = None):
         """ Initializes the Prophet model and necessary attributes.
         Prophet requires a DataFrame with two columns: 'ds' for the date and 'y' for the value to be forecasted.
         """
         super().__init__(exog_cols)
-        self._model = Prophet()
+        self._model_params = model_params if model_params is not None else {}
+        self._model = Prophet(**self._model_params)
         for col in self.exog_cols:
             self._model.add_regressor(col)
         self._forecast = None

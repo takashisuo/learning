@@ -18,6 +18,12 @@ ph = ProphetTrainingHandler()
 df = ph.transform_to_prophet_format(df, date_col='Month', value_col='Passengers')
 future_periods = 12
 
+# ベストパラメータ探索
+best_params = ph.tune_hyperparameters(df, test_size=future_periods, n_trials=20)
+
+# ベストモデルで学習
+ph.build_best_model(best_params)
+
 # 評価
 eval_results = ph.evaluate(df, test_size=future_periods)
 print(eval_results)
