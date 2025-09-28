@@ -27,6 +27,8 @@ class ProphetTrainingHandler(TimeSeriesAbstractHandler):
         self._model = Prophet()
         for col in self.exog_cols:
             self._model.add_regressor(col)
+            print(f"added regressor: {col}")
+        self._forecast = None
         self._train = None
         self._test = None
         self._train_pred = None
@@ -47,16 +49,51 @@ class ProphetTrainingHandler(TimeSeriesAbstractHandler):
         # return: forecast DataFrame: columns: 'ds', 'yhat', 'yhat_lower', 'yhat_upper'
         future = self._model.make_future_dataframe(periods=periods, freq=freq)
 
-        # 外生変数がある場合は future_exog を連結
         if self.exog_cols:
             if future_exog is None:
-                raise ValueError("Exogenous variables are required but future_exog is None.")
-            if not set(self.exog_cols).issubset(future_exog.columns):
-                raise ValueError(f"future_exog must contain columns: {self.exog_cols}")
-            future = future.merge(future_exog, on="ds", how="left")
-        
-        self.forecast = self._model.predict(future)
-        return self.forecast
+                # 外生変数が指定されていない場合、最後の値で埋める
+                for col in self.exog_cols:
+                    last_val = self._train[col].iloc[-1]
+                    future[col] = last_val
+            else:
+                # future_exogが提供されている場合
+                future_exog = future_exog.copy()
+                
+                # dsカラムがない場合は追加
+                if 'ds' not in future_exog.columns:
+                    # future_exogの行数がperiodsと一致する場合、未来のdateを設定
+                    if len(future_exog) == periods:
+                        future_exog['ds'] = future['ds'].tail(periods).values
+                    else:
+                        # 全期間のdateを設定
+                        future_exog['ds'] = future['ds'].values[:len(future_exog)]
+                
+                # 外生変数の値を設定
+                for col in self.exog_cols:
+                    if col in future_exog.columns:
+                        # NaN値は訓練データの最後の値で補完
+                        if future_exog[col].isna().any():
+                            future_exog[col].fillna(self._train[col].iloc[-1], inplace=True)
+                        future[col] = None  # 初期化
+                    else:
+                        # カラムが存在しない場合は訓練データの最後の値で埋める
+                        future_exog[col] = self._train[col].iloc[-1]
+                
+                # futureデータフレームに外生変数をマージ
+                # 最初に既存の外生変数カラムを削除
+                for col in self.exog_cols:
+                    if col in future.columns:
+                        future = future.drop(columns=[col])
+                
+                future = future.merge(future_exog[['ds'] + self.exog_cols], on='ds', how='left')
+                
+                # マージ後にNaN値が残っている場合は補完
+                for col in self.exog_cols:
+                    if future[col].isna().any():
+                        future[col].fillna(self._train[col].iloc[-1], inplace=True)
+
+        self._forecast = self._model.predict(future)
+        return self._forecast
     
     def tune_hyperparameters(
             self,
@@ -69,7 +106,7 @@ class ProphetTrainingHandler(TimeSeriesAbstractHandler):
             params: dict = None
         ) -> dict:
         """
-        OptunaでProphetのハイパーパラメータ探索を行い、最適パラメータを返す。
+        Optunaを使ってProphetのハイパーパラメータ探索を行い、最適パラメータを返す。
 
         Returns:
             dict: 最適パラメータ {'changepoint_prior_scale': ..., 'seasonality_prior_scale': ...}
@@ -110,8 +147,11 @@ class ProphetTrainingHandler(TimeSeriesAbstractHandler):
 
                 future = model.make_future_dataframe(periods=len(val_data), freq=freq)
                 if self.exog_cols:
-                    future = future.merge(val_data[self.exog_cols + ['ds']], on='ds', how='left')
-
+                    # 外生変数の予測時の値を最後の値で仮固定
+                    for col in self.exog_cols:
+                        last_val = train_data[col].iloc[-1]  # 最後の値を取得
+                        future[col] = last_val
+                
                 forecast = model.predict(future)
                 preds = forecast.tail(len(val_data))['yhat'].values
                 val_mse = mean_squared_error(val_data['y'].values, preds)
@@ -164,10 +204,22 @@ class ProphetTrainingHandler(TimeSeriesAbstractHandler):
             train = self._train
             test = self._test
 
+        # 外生変数の処理を改善
+        future_exog = None
+        if self.exog_cols:
+            # テストデータの外生変数を準備
+            future_exog = test[self.exog_cols].copy()
+            
+            # 訓練データの最後の値を使ってNaN値を補完
+            for col in self.exog_cols:
+                if future_exog[col].isna().any():
+                    last_val = train[col].iloc[-1]
+                    future_exog[col].fillna(last_val, inplace=True)
+
         test_forecast: pd.DataFrame = self.predict(
             periods=test_size,
             freq=freq,
-            future_exog=test[self.exog_cols] if self.exog_cols else None
+            future_exog=future_exog
             )
 
         test_true = test['y'].values
@@ -253,14 +305,48 @@ class ProphetProductHandler(TimeSeriesAbstractHandler):
         # return: forecast DataFrame: columns: 'ds', 'yhat', 'yhat_lower', 'yhat_upper'
         future = self._model.make_future_dataframe(periods=periods, freq=freq)
 
-        # 外生変数がある場合は future_exog を連結
         if self.exog_cols:
             if future_exog is None:
-                raise ValueError("Exogenous variables are required but future_exog is None.")
-            if not set(self.exog_cols).issubset(future_exog.columns):
-                raise ValueError(f"future_exog must contain columns: {self.exog_cols}")
-            future = future.merge(future_exog, on="ds", how="left")
-        
+                # 外生変数が指定されていない場合、最後の値で埋める
+                for col in self.exog_cols:
+                    last_val = self._train[col].iloc[-1]
+                    future[col] = last_val
+            else:
+                future_exog = future_exog.copy()
+                
+                # dsカラムがない場合は追加
+                if 'ds' not in future_exog.columns:
+                    # future_exogの行数がperiodsと一致する場合、未来のdateを設定
+                    if len(future_exog) == periods:
+                        future_exog['ds'] = future['ds'].tail(periods).values
+                    else:
+                        # 全期間のdateを設定
+                        future_exog['ds'] = future['ds'].values[:len(future_exog)]
+                
+                # 外生変数の値を設定
+                for col in self.exog_cols:
+                    if col in future_exog.columns:
+                        # NaN値は訓練データの最後の値で補完
+                        if future_exog[col].isna().any():
+                            future_exog[col].fillna(self._train[col].iloc[-1], inplace=True)
+                        future[col] = None  # 初期化
+                    else:
+                        # カラムが存在しない場合は訓練データの最後の値で埋める
+                        future_exog[col] = self._train[col].iloc[-1]
+                
+                # futureデータフレームに外生変数をマージ
+                # 最初に既存の外生変数カラムを削除
+                for col in self.exog_cols:
+                    if col in future.columns:
+                        future = future.drop(columns=[col])
+                
+                future = future.merge(future_exog[['ds'] + self.exog_cols], on='ds', how='left')
+                
+                # マージ後にNaN値が残っている場合は補完
+                for col in self.exog_cols:
+                    if future[col].isna().any():
+                        future[col].fillna(self._train[col].iloc[-1], inplace=True)
+
         self._forecast = self._model.predict(future)
         return self._forecast
 
