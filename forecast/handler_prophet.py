@@ -49,48 +49,47 @@ class ProphetTrainingHandler(TimeSeriesAbstractHandler):
         # return: forecast DataFrame: columns: 'ds', 'yhat', 'yhat_lower', 'yhat_upper'
         future = self._model.make_future_dataframe(periods=periods, freq=freq)
 
-        if self.exog_cols:
-            if future_exog is None:
-                # 外生変数が指定されていない場合、最後の値で埋める
-                for col in self.exog_cols:
-                    last_val = self._train[col].iloc[-1]
-                    future[col] = last_val
-            else:
-                # future_exogが提供されている場合
-                future_exog = future_exog.copy()
-                
-                # dsカラムがない場合は追加
-                if 'ds' not in future_exog.columns:
-                    # future_exogの行数がperiodsと一致する場合、未来のdateを設定
-                    if len(future_exog) == periods:
-                        future_exog['ds'] = future['ds'].tail(periods).values
-                    else:
-                        # 全期間のdateを設定
-                        future_exog['ds'] = future['ds'].values[:len(future_exog)]
-                
-                # 外生変数の値を設定
-                for col in self.exog_cols:
-                    if col in future_exog.columns:
-                        # NaN値は訓練データの最後の値で補完
-                        if future_exog[col].isna().any():
-                            future_exog[col].fillna(self._train[col].iloc[-1], inplace=True)
-                        future[col] = None  # 初期化
-                    else:
-                        # カラムが存在しない場合は訓練データの最後の値で埋める
-                        future_exog[col] = self._train[col].iloc[-1]
-                
-                # futureデータフレームに外生変数をマージ
-                # 最初に既存の外生変数カラムを削除
-                for col in self.exog_cols:
-                    if col in future.columns:
-                        future = future.drop(columns=[col])
-                
-                future = future.merge(future_exog[['ds'] + self.exog_cols], on='ds', how='left')
-                
-                # マージ後にNaN値が残っている場合は補完
-                for col in self.exog_cols:
-                    if future[col].isna().any():
-                        future[col].fillna(self._train[col].iloc[-1], inplace=True)
+        if (self.exog_cols is not None and len(self.exog_cols) > 0) and future_exog is None:
+            raise ValueError("Exogenous columns are specified but future_exog is None.")
+        elif (self.exog_cols is None and len(self.exog_cols) == 0) and future_exog is not None:
+            raise ValueError("Exogenous columns are not specified but future_exog is provided.")
+
+        if future_exog is not None:
+            # future_exogが提供されている場合
+            future_exog = future_exog.copy()
+            
+            # dsカラムがない場合は追加
+            if 'ds' not in future_exog.columns:
+                # future_exogの行数がperiodsと一致する場合、未来のdateを設定
+                if len(future_exog) == periods:
+                    future_exog['ds'] = future['ds'].tail(periods).values
+                else:
+                    # 全期間のdateを設定
+                    future_exog['ds'] = future['ds'].values[:len(future_exog)]
+            
+            # 外生変数の値を設定
+            for col in self.exog_cols:
+                if col in future_exog.columns:
+                    # NaN値は訓練データの最後の値で補完
+                    if future_exog[col].isna().any():
+                        future_exog[col].fillna(self._train[col].iloc[-1], inplace=True)
+                    future[col] = None  # 初期化
+                else:
+                    # カラムが存在しない場合は訓練データの最後の値で埋める
+                    future_exog[col] = self._train[col].iloc[-1]
+            
+            # futureデータフレームに外生変数をマージ
+            # 最初に既存の外生変数カラムを削除
+            for col in self.exog_cols:
+                if col in future.columns:
+                    future = future.drop(columns=[col])
+            
+            future = future.merge(future_exog[['ds'] + self.exog_cols], on='ds', how='left')
+            
+            # マージ後にNaN値が残っている場合は補完
+            for col in self.exog_cols:
+                if future[col].isna().any():
+                    future[col].fillna(self._train[col].iloc[-1], inplace=True)
 
         self._forecast = self._model.predict(future)
         return self._forecast
@@ -206,6 +205,7 @@ class ProphetTrainingHandler(TimeSeriesAbstractHandler):
 
         # 外生変数の処理を改善
         future_exog = None
+        print(f"self.exog_cols: {self.exog_cols}")
         if self.exog_cols:
             # テストデータの外生変数を準備
             future_exog = test[self.exog_cols].copy()
@@ -305,47 +305,47 @@ class ProphetProductHandler(TimeSeriesAbstractHandler):
         # return: forecast DataFrame: columns: 'ds', 'yhat', 'yhat_lower', 'yhat_upper'
         future = self._model.make_future_dataframe(periods=periods, freq=freq)
 
-        if self.exog_cols:
-            if future_exog is None:
-                # 外生変数が指定されていない場合、最後の値で埋める
-                for col in self.exog_cols:
-                    last_val = self._train[col].iloc[-1]
-                    future[col] = last_val
-            else:
-                future_exog = future_exog.copy()
-                
-                # dsカラムがない場合は追加
-                if 'ds' not in future_exog.columns:
-                    # future_exogの行数がperiodsと一致する場合、未来のdateを設定
-                    if len(future_exog) == periods:
-                        future_exog['ds'] = future['ds'].tail(periods).values
-                    else:
-                        # 全期間のdateを設定
-                        future_exog['ds'] = future['ds'].values[:len(future_exog)]
-                
-                # 外生変数の値を設定
-                for col in self.exog_cols:
-                    if col in future_exog.columns:
-                        # NaN値は訓練データの最後の値で補完
-                        if future_exog[col].isna().any():
-                            future_exog[col].fillna(self._train[col].iloc[-1], inplace=True)
-                        future[col] = None  # 初期化
-                    else:
-                        # カラムが存在しない場合は訓練データの最後の値で埋める
-                        future_exog[col] = self._train[col].iloc[-1]
-                
-                # futureデータフレームに外生変数をマージ
-                # 最初に既存の外生変数カラムを削除
-                for col in self.exog_cols:
-                    if col in future.columns:
-                        future = future.drop(columns=[col])
-                
-                future = future.merge(future_exog[['ds'] + self.exog_cols], on='ds', how='left')
-                
-                # マージ後にNaN値が残っている場合は補完
-                for col in self.exog_cols:
-                    if future[col].isna().any():
-                        future[col].fillna(self._train[col].iloc[-1], inplace=True)
+        if (self.exog_cols is not None and len(self.exog_cols) > 0) and future_exog is None:
+            raise ValueError("Exogenous columns are specified but future_exog is None.")
+        elif (self.exog_cols is None and len(self.exog_cols) == 0) and future_exog is not None:
+            raise ValueError("Exogenous columns are not specified but future_exog is provided.")
+
+        if future_exog is not None:
+            # future_exogが提供されている場合
+            future_exog = future_exog.copy()
+            
+            # dsカラムがない場合は追加
+            if 'ds' not in future_exog.columns:
+                # future_exogの行数がperiodsと一致する場合、未来のdateを設定
+                if len(future_exog) == periods:
+                    future_exog['ds'] = future['ds'].tail(periods).values
+                else:
+                    # 全期間のdateを設定
+                    future_exog['ds'] = future['ds'].values[:len(future_exog)]
+            
+            # 外生変数の値を設定
+            for col in self.exog_cols:
+                if col in future_exog.columns:
+                    # NaN値は訓練データの最後の値で補完
+                    if future_exog[col].isna().any():
+                        future_exog[col].fillna(self._train[col].iloc[-1], inplace=True)
+                    future[col] = None  # 初期化
+                else:
+                    # カラムが存在しない場合は訓練データの最後の値で埋める
+                    future_exog[col] = self._train[col].iloc[-1]
+            
+            # futureデータフレームに外生変数をマージ
+            # 最初に既存の外生変数カラムを削除
+            for col in self.exog_cols:
+                if col in future.columns:
+                    future = future.drop(columns=[col])
+            
+            future = future.merge(future_exog[['ds'] + self.exog_cols], on='ds', how='left')
+            
+            # マージ後にNaN値が残っている場合は補完
+            for col in self.exog_cols:
+                if future[col].isna().any():
+                    future[col].fillna(self._train[col].iloc[-1], inplace=True)
 
         self._forecast = self._model.predict(future)
         return self._forecast

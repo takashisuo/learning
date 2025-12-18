@@ -4,6 +4,8 @@ import joblib
 import pandas as pd
 import optuna
 import logging
+from statsforecast import StatsForecast
+from statsforecast.models import AutoARIMA
 from sklearn.metrics import mean_squared_error, mean_absolute_error, mean_absolute_percentage_error
 from pmdarima.model_selection import train_test_split
 from sklearn.model_selection import TimeSeriesSplit
@@ -19,8 +21,8 @@ from abc import ABC, abstractmethod
 class TimeSeriesAbstractHandler(ABC):
     def __init__(self, exog_cols=None):
         self.exog_cols = exog_cols if exog_cols is not None else []
-        self.model = None
-        self.forecast = None
+        self._model = None
+        self._forecast = None
 
     @abstractmethod
     def fit(self, df: pd.DataFrame):

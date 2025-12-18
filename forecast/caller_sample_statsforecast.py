@@ -7,26 +7,41 @@ from forecast.helper import TimeSeriesHelper
 from forecast.handler_statsforecast import StatsForecastTrainingHandler, StatsForecastProductHandler
 import pandas as pd
 
-#%%
 # サンプルデータの読み込み(AirPassengersデータセット)
 url = 'https://raw.githubusercontent.com/jbrownlee/Datasets/master/airline-passengers.csv'
 df = pd.read_csv(url)
 df['Month'] = pd.to_datetime(df['Month'])
+print(f"---- head ----")
 print(df.head())
+print(f"---- tail ----")
+print(df.tail())
 
-# Prophet用にデータを変換
-df = TimeSeriesHelper.to_statsforecast_format(df, date_col='Month', value_col='Passengers')
+#%%
+# statsforecast用にデータを変換
+df_stats = TimeSeriesHelper.to_statsforecast_format(df, date_col='Month', value_col='Passengers')
 future_periods = 12
 ph = StatsForecastTrainingHandler()
 
+ph.fit(df_stats)
+
+result = ph.predict(periods=12)
+
+print(f"result: {result}")
+
+#%%
 # ベストパラメータ探索
-best_params = ph.tune_hyperparameters(df, test_size=future_periods, n_trials=20)
+
+df_stats = TimeSeriesHelper.to_statsforecast_format(df, date_col='Month', value_col='Passengers')
+future_periods = 12
+ph = StatsForecastTrainingHandler()
+
+best_params = ph.tune_hyperparameters(df_stats, test_size=future_periods, n_trials=20)
 
 # ベストモデルで学習
 ph.build_best_model(best_params)
 
 # 評価
-eval_results = ph.evaluate(df, test_size=future_periods)
+eval_results = ph.evaluate(df_stats, test_size=future_periods)
 print(eval_results)
 
 # 可視化
@@ -39,7 +54,8 @@ train_df = ph.get_train_data()
 #%%
 # 本番用ハンドラの使用例
 ph_prod = StatsForecastProductHandler(model_params=best_params)
-ph_prod.fit(df)
+ph_prod.fit(df_stats)
 forecast_df_prod = ph_prod.predict(periods=future_periods, freq='M')
 print(forecast_df_prod[['ds', 'y']].tail())
 ph_prod.plot() 
+#"""

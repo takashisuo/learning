@@ -57,23 +57,45 @@ class StatsForecastTrainingHandler(TimeSeriesAbstractHandler):
                 "max_p": trial.suggest_int("max_p", 2, 5),
                 "max_q": trial.suggest_int("max_q", 2, 5),
             }
-            tss = TimeSeriesSplit(test_size=val_size)
-            cv_mse = []
-            for train_idx, val_idx in tss.split(train_df):
-                tr, val = train_df.iloc[train_idx], train_df.iloc[val_idx]
-                model = StatsForecast(models=[AutoARIMA(**params)], freq=self.freq, n_jobs=-1)
-                model.fit(tr)
-                preds = model.predict(h=len(val))
-                merged = val.merge(preds, on=["unique_id", "ds"], how="left")
-                mse = mean_squared_error(merged["y"], merged["AutoARIMA"])
-                cv_mse.append(mse)
-            return np.mean(cv_mse)
+
+            # --- 修正: 明示的に末尾から val_size を検証用に切り出す ---
+            tr = train_df.iloc[:-val_size]
+            val = train_df.iloc[-val_size:]
+
+            model = StatsForecast(models=[AutoARIMA(**params)], freq=self.freq, n_jobs=-1)
+            model.fit(tr)
+
+            preds = model.predict(h=val_size)
+
+            # inner join で日付を揃える
+            merged = val.merge(preds, on=["unique_id", "ds"], how="inner")
+
+            if len(merged) < len(val) or merged["AutoARIMA"].isna().any():
+                return float("inf")  # この trial は無効
+
+            mse = mean_squared_error(merged["y"], merged["AutoARIMA"])
+            return mse
 
         optuna.logging.disable_default_handler()
         study = optuna.create_study(direction="minimize")
         study.optimize(objective, n_trials=n_trials, n_jobs=-1)
+
         self.best_params = study.best_params
         return self.best_params
+
+    def build_best_model(self, params: dict = None):
+        """
+        tune_hyperparametersで探索済みの最適パラメータを使って学習済みモデルを作成。
+        df: 再学習に使うデータ（指定しない場合は self._train を利用）
+        params: 明示的にパラメータを指定したい場合に渡す
+        """
+        if not hasattr(self, 'best_params') and params is None:
+            raise ValueError("Best params not found. Run tune_hyperparameters first or pass params.")
+
+        best_params = params if params is not None else self.best_params
+        self._model = StatsForecast(models=[AutoARIMA(**best_params)], freq=self.freq, n_jobs=-1)
+        self._model.fit(self._train)
+        return self._model
 
     def evaluate(self, df: pd.DataFrame, test_size: int = 12) -> dict:
         if not set(["unique_id", "ds", "y"]).issubset(df.columns):
@@ -81,7 +103,13 @@ class StatsForecastTrainingHandler(TimeSeriesAbstractHandler):
         train, test = train_test_split(df, test_size=test_size)
         self._train, self._test = train, test
         self.fit(train)
-        preds = self.predict(periods=len(test))
+
+        if self.exog_cols:
+            future_exog = test[["unique_id", "ds"] + self.exog_cols]
+        else:
+            future_exog = None
+        preds = self.predict(periods=len(test), future_exog=future_exog)
+        print(f"preds: {preds}")
         merged = test.merge(preds, on=["unique_id", "ds"], how="left")
         mse = mean_squared_error(merged["y"], merged["AutoARIMA"])
         mae = mean_absolute_error(merged["y"], merged["AutoARIMA"])
