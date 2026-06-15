@@ -1,0 +1,346 @@
+app:
+  description: 在庫数・過去の売上データ・天気から商品ごとに店に出す数を分析します
+  icon: 🤖
+  icon_background: '#FFEAD5'
+  mode: workflow
+  name: 商品の品出し数分析アプリ
+  use_icon_as_answer_icon: false
+dependencies:
+- current_identifier: null
+  type: marketplace
+  value:
+    marketplace_plugin_unique_identifier: langgenius/openai:0.0.7@11ec0b1909200f62b6ebf2cec1da981a9071d11c1ee0e2ef332ce89bcffa2544
+kind: app
+version: 0.4.0
+workflow:
+  conversation_variables: []
+  environment_variables: []
+  features:
+    file_upload:
+      allowed_file_extensions:
+      - .JPG
+      - .JPEG
+      - .PNG
+      - .GIF
+      - .WEBP
+      - .SVG
+      allowed_file_types:
+      - image
+      allowed_file_upload_methods:
+      - local_file
+      - remote_url
+      enabled: false
+      fileUploadConfig:
+        audio_file_size_limit: 50
+        batch_count_limit: 5
+        file_size_limit: 15
+        image_file_size_limit: 10
+        video_file_size_limit: 100
+        workflow_file_upload_limit: 10
+      image:
+        enabled: false
+        number_limits: 3
+        transfer_methods:
+        - local_file
+        - remote_url
+      number_limits: 3
+    opening_statement: ''
+    retriever_resource:
+      enabled: true
+    sensitive_word_avoidance:
+      enabled: false
+    speech_to_text:
+      enabled: false
+    suggested_questions: []
+    suggested_questions_after_answer:
+      enabled: false
+    text_to_speech:
+      enabled: false
+      language: ''
+      voice: ''
+  graph:
+    edges:
+    - data:
+        isInLoop: false
+        sourceType: start
+        targetType: http-request
+      id: 1757323478645-source-1757422746136-target
+      source: '1757323478645'
+      sourceHandle: source
+      target: '1757422746136'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInLoop: false
+        sourceType: http-request
+        targetType: http-request
+      id: 1757422746136-source-1757426037282-target
+      source: '1757422746136'
+      sourceHandle: source
+      target: '1757426037282'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInLoop: false
+        sourceType: http-request
+        targetType: code
+      id: 1757426037282-source-1757422912544-target
+      source: '1757426037282'
+      sourceHandle: source
+      target: '1757422912544'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInLoop: false
+        sourceType: code
+        targetType: llm
+      id: 1757422912544-source-1757428084537-target
+      source: '1757422912544'
+      sourceHandle: source
+      target: '1757428084537'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInLoop: false
+        sourceType: llm
+        targetType: end
+      id: 1757428084537-source-1757426804615-target
+      source: '1757428084537'
+      sourceHandle: source
+      target: '1757426804615'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    nodes:
+    - data:
+        desc: ''
+        selected: false
+        title: 開始
+        type: start
+        variables:
+        - default: 晴れ
+          label: 今日の天気
+          max_length: 48
+          options:
+          - 晴れ
+          - 雨
+          - 曇り
+          required: true
+          type: select
+          variable: weather
+      height: 90
+      id: '1757323478645'
+      position:
+        x: 30
+        y: 292
+      positionAbsolute:
+        x: 30
+        y: 292
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+    - data:
+        authorization:
+          config: null
+          type: no-auth
+        body:
+          data: []
+          type: none
+        desc: 'sales
+
+          '
+        headers: ''
+        method: get
+        params: ''
+        retry_config:
+          max_retries: 3
+          retry_enabled: true
+          retry_interval: 100
+        selected: false
+        ssl_verify: true
+        timeout:
+          max_connect_timeout: 0
+          max_read_timeout: 0
+          max_write_timeout: 0
+        title: HTTP リクエスト
+        type: http-request
+        url: https://teamsamurai.github.io/dify-datasets/dify-python/sales.csv
+        variables: []
+      height: 184
+      id: '1757422746136'
+      position:
+        x: 334
+        y: 292
+      positionAbsolute:
+        x: 334
+        y: 292
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+    - data:
+        code: "# 引数  sales：過去の売上データ　stock：在庫データ　weather：今日の天気\n\ndef main(sales: str,\
+          \ stock: str, weather: str) -> dict:\n    # 過去の売り上げのcsvデータを配列linesに1行ずつ格納する\n\
+          \    lines = sales.strip().split('\\n')\n\n    # 今日の天気と一致する売上データを、過去の売上データ（sales）から抽出する\n\
+          \    for i in range(len(lines) - 1, 0, -1):\n        # weatherと一致する値が含まれていない行は削除する\n\
+          \        line = lines[i]\n        if weather not in line:\n            del\
+          \ lines[i]\n    \n    # ディクショナリに各データをresponse_dataに格納して返却する\n    response_data\
+          \ = {\n        \"sales\":lines,\n        \"stock\":stock,\n        \"weather\"\
+          :weather\n    }\n\n    return {\n        \"result\":str(response_data),\n\
+          \    }\n    "
+        code_language: python3
+        desc: 過去の売上データから、今日の天気と一致するデータのみに絞り込む
+        outputs:
+          result:
+            children: null
+            type: string
+        selected: false
+        title: コード実行
+        type: code
+        variables:
+        - value_selector:
+          - '1757422746136'
+          - body
+          value_type: string
+          variable: sales
+        - value_selector:
+          - '1757426037282'
+          - body
+          value_type: string
+          variable: stock
+        - value_selector:
+          - '1757323478645'
+          - weather
+          value_type: string
+          variable: weather
+      height: 98
+      id: '1757422912544'
+      position:
+        x: 942
+        y: 292
+      positionAbsolute:
+        x: 942
+        y: 292
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+    - data:
+        authorization:
+          config: null
+          type: no-auth
+        body:
+          data: []
+          type: none
+        desc: 'stock
+
+          '
+        headers: ''
+        method: get
+        params: ''
+        retry_config:
+          max_retries: 3
+          retry_enabled: true
+          retry_interval: 100
+        selected: false
+        ssl_verify: true
+        timeout:
+          max_connect_timeout: 0
+          max_read_timeout: 0
+          max_write_timeout: 0
+        title: HTTP リクエスト 2
+        type: http-request
+        url: https://teamsamurai.github.io/dify-datasets/dify-python/stock.csv
+        variables: []
+      height: 184
+      id: '1757426037282'
+      position:
+        x: 638
+        y: 292
+      positionAbsolute:
+        x: 638
+        y: 292
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+    - data:
+        desc: ''
+        outputs:
+        - value_selector:
+          - '1757428084537'
+          - text
+          value_type: string
+          variable: result
+        selected: false
+        title: 終了
+        type: end
+      height: 90
+      id: '1757426804615'
+      position:
+        x: 1550
+        y: 292
+      positionAbsolute:
+        x: 1550
+        y: 292
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+    - data:
+        context:
+          enabled: true
+          variable_selector:
+          - '1757422912544'
+          - result
+        desc: ''
+        model:
+          completion_params:
+            temperature: 0.7
+          mode: chat
+          name: gpt-4o-mini
+          provider: langgenius/openai/openai
+        prompt_template:
+        - id: 225fb0ef-4d23-4229-bcc7-b6be57201553
+          role: system
+          text: 'コンテキストのデータは、過去の売上データと、現在の店舗の商品の在庫データです。
+
+            天気も考慮してバックヤードから店舗に品出しすべき数を商品ごとに算出してください。
+
+
+            ## コンテキスト
+
+            {{#context#}}'
+        selected: false
+        title: LLM
+        type: llm
+        variables: []
+        vision:
+          enabled: false
+      height: 90
+      id: '1757428084537'
+      position:
+        x: 1246
+        y: 292
+      positionAbsolute:
+        x: 1246
+        y: 292
+      selected: true
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+    viewport:
+      x: 323.04030629658854
+      y: 321.3324486534995
+      zoom: 0.47999608761594936

@@ -1,0 +1,12 @@
+defaults:
+  - model: lgbm
+
+optuna:
+  n_trials: 10
+  direction: maximize
+
+mlflow:
+  experiment_name: titanic_optimization
+
+data:
+  target: survived

@@ -1,3 +1,4 @@
+日時: 2026/02/03 15:00-16:00
 1. pip install poetry (condaで作成した仮想環境上で実行する)
 2. 作成したい上位フォルダからpoetry new prj名をおこなう。
     例: poetryというフォルダからpoetry new poetry-demoをおこなうと、poetryの中にpoetry-demoフォルダが生成される。

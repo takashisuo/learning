@@ -167,3 +167,5 @@ cython_debug/
 *.jpg
 
 
+outputs/
+catboost_info/
