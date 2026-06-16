@@ -1,0 +1,206 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Helvetica Neue', Arial, 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  background: #f0f4f8;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.container {
+  width: 100%;
+  max-width: 640px;
+}
+
+.title {
+  text-align: center;
+  font-size: 1.6rem;
+  color: #2d3748;
+  margin-bottom: 24px;
+  letter-spacing: 0.05em;
+}
+
+/* プログレスエリア */
+.progress-area {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+#question-number {
+  font-size: 0.85rem;
+  color: #718096;
+  white-space: nowrap;
+  min-width: 70px;
+}
+
+.progress-bar {
+  flex: 1;
+  height: 8px;
+  background: #e2e8f0;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+#progress-fill {
+  height: 100%;
+  background: #4299e1;
+  border-radius: 4px;
+  transition: width 0.4s ease;
+  width: 0%;
+}
+
+/* カード */
+.card {
+  background: #fff;
+  border-radius: 16px;
+  padding: 32px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+}
+
+/* 問題文 */
+.question-text {
+  font-size: 1.15rem;
+  color: #2d3748;
+  line-height: 1.7;
+  margin-bottom: 24px;
+  font-weight: 600;
+}
+
+/* 選択肢 */
+.choices {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.choice-btn {
+  display: block;
+  width: 100%;
+  padding: 14px 18px;
+  background: #f7fafc;
+  border: 2px solid #e2e8f0;
+  border-radius: 10px;
+  font-size: 1rem;
+  color: #2d3748;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, transform 0.1s;
+}
+
+.choice-btn:hover:not(:disabled) {
+  background: #ebf8ff;
+  border-color: #90cdf4;
+  transform: translateY(-1px);
+}
+
+.choice-btn:disabled {
+  cursor: not-allowed;
+}
+
+.choice-btn.correct {
+  background: #c6f6d5;
+  border-color: #48bb78;
+  color: #22543d;
+}
+
+.choice-btn.incorrect {
+  background: #fed7d7;
+  border-color: #fc8181;
+  color: #742a2a;
+}
+
+.choice-btn.highlight {
+  background: #c6f6d5;
+  border-color: #48bb78;
+  color: #22543d;
+}
+
+/* フィードバック */
+.feedback {
+  padding: 12px 16px;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin-bottom: 20px;
+  line-height: 1.5;
+}
+
+.feedback.correct {
+  background: #f0fff4;
+  color: #276749;
+  border-left: 4px solid #48bb78;
+}
+
+.feedback.incorrect {
+  background: #fff5f5;
+  color: #c53030;
+  border-left: 4px solid #fc8181;
+}
+
+/* ボタン */
+.btn {
+  display: block;
+  width: 100%;
+  padding: 14px;
+  background: #4299e1;
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.1s;
+}
+
+.btn:hover {
+  background: #3182ce;
+  transform: translateY(-1px);
+}
+
+.btn:active {
+  transform: translateY(0);
+}
+
+/* 結果画面 */
+.result-card {
+  text-align: center;
+}
+
+.result-icon {
+  font-size: 3rem;
+  margin-bottom: 16px;
+}
+
+.result-title {
+  font-size: 1.4rem;
+  color: #2d3748;
+  margin-bottom: 16px;
+}
+
+.score-text {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #2b6cb0;
+  margin-bottom: 8px;
+}
+
+.score-comment {
+  font-size: 1rem;
+  color: #718096;
+  margin-bottom: 28px;
+}
+
+/* ユーティリティ */
+.hidden {
+  display: none;
+}
