@@ -1,0 +1,11 @@
+[sqlfluff]
+dialect = tsql
+# Keep column/table identifiers (CP02) untouched, do not force a case style
+exclude_rules = CP02
+
+[sqlfluff:rules:capitalisation.keywords]
+capitalisation_policy = lower
+
+# Use leading comma style
+[sqlfluff:layout:type:comma]
+line_position = leading
