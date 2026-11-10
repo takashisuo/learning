@@ -1,11 +1,23 @@
 [tool.sqlfluff.core]
 dialect = "tsql"
-# Keep column/table identifiers (CP02) untouched, do not force a case style
-exclude_rules = "CP02"
+encoding = "utf8"
+rules = "LT01,LT02,LT12,CP01,CP03,LT04"
 
 [tool.sqlfluff.rules.capitalisation.keywords]
 capitalisation_policy = "lower"
 
+[tool.sqlfluff.rules.capitalisation.functions]
+extended_capitalisation_policy = "lower"
+
 [tool.sqlfluff.layout.type.comma]
 # Use leading comma style
 line_position = "leading"
+
+[tool.sqlfluff.indentation]
+indent_unit = "space"
+tab_space_size = 4
+
+indented_ctes = true
+indented_joins = false
+indented_using_on = true
+implicit_indents = "allow"

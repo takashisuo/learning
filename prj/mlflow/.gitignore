@@ -1,0 +1,5 @@
+# サーバー側の実データ(backend store / artifact store)。共有ドライブ等に置く想定でコミット対象外。
+mlflow_env/
+
+# seabornから自動取得したデータのローカルキャッシュ。都度取得できるためコミット対象外。
+data/titanic.csv

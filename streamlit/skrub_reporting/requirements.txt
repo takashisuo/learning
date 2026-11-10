@@ -1,0 +1,4 @@
+skrub>=0.10
+streamlit>=1.40
+scikit-learn>=1.5
+pandas>=2.2

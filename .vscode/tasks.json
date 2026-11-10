@@ -1,0 +1,21 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "SQLFluff: Fix current file",
+            "type": "shell",
+            "command": "C:/Users/ultra/anaconda3/envs/samurai/Scripts/sqlfluff.exe",
+            "args": [
+                "fix",
+                "${file}",
+                "--dialect",
+                "tsql"
+            ],
+            "problemMatcher": [],
+            "presentation": {
+                "reveal": "always",
+                "panel": "dedicated"
+            }
+        }
+    ]
+}

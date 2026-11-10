@@ -1,0 +1,22 @@
+[project]
+name = "shap-decomposition"
+version = "0.1.0"
+description = "SHAPによる回帰予測値の要因分解(California Housing × LightGBM)"
+requires-python = ">=3.11"
+dependencies = [
+    "shap>=0.49",
+    "lightgbm>=4.6",
+    "scikit-learn>=1.5",
+    "pandas>=2.2",
+    "numpy>=1.26",
+    "matplotlib>=3.8",
+    "japanize-matplotlib>=1.1",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "nbformat>=5.9", "nbclient>=0.9", "ipykernel>=6"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# samurai 環境に入っている fugue の pytest プラグインが import エラーを起こすため無効化
+addopts = "-p no:fugue_test -p no:fugue_test_fixtures"
