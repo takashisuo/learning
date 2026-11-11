@@ -60,31 +60,55 @@ SHAP値は「現在の値とデータ平均との差による寄与」であり�
 
 ## 5. ディレクトリ構成
 
+コードは**アプリケーション層**(このデータ固有)と**プラットフォーム層**(データに依存しない汎用I/F)に分ける。
+
 ```
 .
 ├── CLAUDE.md
 ├── pyproject.toml / requirements.txt
 ├── src/
-│   ├── data.py          # データ読込・分割
-│   ├── model.py         # 学習・評価
-│   ├── explain.py       # SHAP計算・加法性チェック
-│   ├── whatif.py        # 再予測シナリオ・差分分解
-│   └── plots.py         # 作図(日本語フォント設定含む)
+│   ├── app_california/          # アプリケーション層: California Housing 固有
+│   │   ├── config.py            # 単位・特徴量の説明・モデルパラメータ・代表サンプル・
+│   │   │                        # What-ifシナリオ・相関ペア・特徴量グループ・出力ファイル名
+│   │   ├── data.py              # データ読込(California / diabetes)
+│   │   ├── model.py             # モデル定義(LightGBM / Ridge)
+│   │   └── pipeline.py          # 分析ステップ(CaliforniaAnalysis)。platform を呼び出して CSV・図を出力
+│   └── xai_platform/            # プラットフォーム層: 汎用I/F(他データでもそのまま使える)
+│       ├── units.py             # Unit: 目的変数の単位と「+0.82(約8.2万ドル)」形式の表記
+│       ├── io.py                # OutputDirs・save_csv/save_json・StepResult(ノートブック表示)
+│       ├── provenance.py        # 出力ファイルの来歴記録(@produces_table / @produces_figure / MANIFEST)
+│       ├── data.py              # Dataset・train/test分割
+│       ├── model.py             # 学習・評価(R²・RMSE・MAE)
+│       ├── explain.py           # SHAP計算・加法性チェック・分解表・相互作用・グループ集計
+│       ├── whatif.py            # 再予測シナリオ・ΔSHAPによる差分分解
+│       └── plots.py             # 作図(日本語フォント設定含む)
 ├── notebooks/
-│   └── shap_decomposition.ipynb   # 説明つきの通し実行用
+│   └── shap_decomposition.ipynb # 説明つきの通し実行用(pipeline のステップを呼ぶだけ)
 ├── outputs/
-│   ├── figures/
-│   ├── tables/
-│   └── report.md        # 結果レポート(日本語)
+│   ├── figures/                 # PNG
+│   ├── tables/                  # CSV・key_results.json
+│   ├── manifest.csv / .md       # 出力ファイル → 生成I/F・分析ステップの対応(自動生成)
+│   └── report.md                # 結果レポート(日本語)
 └── tests/
-    └── test_additivity.py
+    ├── test_additivity.py       # アプリ側: 加法性・Ridge一致・What-if分解
+    └── test_platform.py         # プラットフォーム側: 人工データでの汎用性・来歴記録
 ```
+
+通し実行: `python -m src.app_california.pipeline` / テスト: `python -m pytest`(conda環境 `samurai`)
 
 ## 6. 実装ルール
 
 - Python 3.11+。主要ライブラリ: `shap`, `lightgbm`, `scikit-learn`, `pandas`, `numpy`, `matplotlib`, `japanize-matplotlib`(または同等の日本語フォント設定)。
 - 図のタイトル・軸ラベル・凡例は日本語。特徴量名は英語のままでよいが、初出時に日本語の説明表を付ける(例: MedInc=地区の世帯収入中央値)。
 - 関数に分けて再利用可能にし、ノートブックには呼び出しと解説だけを置く。
+- **層の分離**:
+  - `xai_platform` にはデータ固有の値(特徴量名・単位・グループ・シナリオ・図のタイトル・ファイル名)を書かない。すべて引数で受け取る。
+  - データ固有の設定は `app_california/config.py` に集約する。
+  - 新しいデータに適用するときは、`app_<名前>/` を追加し、platform は変更しない。
+- **来歴の記録**:
+  - 表を返す platform I/F には `@produces_table`、図を保存する I/F には `@produces_figure` を付ける。
+  - 出力は `xai_platform.io.save_csv` / `save_json` で保存する。こうすると `outputs/manifest.*` に生成I/Fが自動で記録される。
+  - アプリ側で組み立てた表は、`save_csv(..., source=...)` で使ったI/Fを明示する。
 - 乱数は全て `SEED = 42` で固定。実行して同じ結果が出ること。
 - 図は `outputs/figures/` に PNG(dpi=150以上)で保存。表は CSV で `outputs/tables/` に保存。
 - 外部ネットワーク前提の処理は最小限にする(データ取得以外は不要)。
@@ -100,6 +124,7 @@ SHAP値は「現在の値とデータ平均との差による寄与」であり�
 - [ ] 依存プロットと相互作用の図がある
 - [ ] 予測値全体の構成(グループ別積み上げ)の図がある
 - [ ] `outputs/report.md` に、結論・手法・注意事項(第4章)が日本語でまとまっている
+- [ ] `outputs/manifest.md` で、すべての出力ファイルについて生成I/Fが分かる
 
 ## 8. 作業の進め方
 
