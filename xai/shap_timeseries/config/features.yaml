@@ -1,0 +1,141 @@
+# Bike Sharing(日次)の分析設定。データ固有の値はすべてここに置く。
+seed: 42
+
+data:
+  raw_dir: data/raw
+  csv: day.csv
+  zip: bike_sharing.zip           # day.csv が無ければ zip から読む
+  uci_id: 275                     # どちらも無ければ ucimlrepo を試す(未インストールなら停止)
+  date_col: dteday
+  target: cnt
+  drop_cols: [instant, casual, registered]   # casual + registered = cnt(リーク源)
+  # 元データは正規化済み。元の単位に戻す(Readme.txt の定義)
+  rescale:
+    temp: {name: temp_c, scale: 41}           # ℃
+    atemp: {name: atemp_c, scale: 50}         # ℃(体感)
+    hum: {name: hum_pct, scale: 100}          # %
+    windspeed: {name: wind_kmh, scale: 67}    # km/h
+
+unit:
+  label: 件/日           # 目的変数 cnt = 1日のレンタル件数
+  digits: 0
+
+split:
+  test_ratio: 0.2       # 末尾20%をテスト期間
+  cv_splits: 5          # チューニング用 TimeSeriesSplit(拡張窓)
+
+horizon: 1              # 1ステップ先(翌日)予測のみ
+
+# 特徴量の作り方とグループ。features.py がこの定義どおりに生成し、グループ表も返す。
+features:
+  ar:                   # 自己回帰: すべて shift 済み(t-1 以前の目的変数のみ使用)
+    lags: [1, 7, 14, 28]
+    rolling:
+      windows: [7, 28]
+      stats: [mean, std]
+  # workingday は曜日と祝日から決まるのでカレンダー扱い(外生変数ではない)
+  calendar: [weekday, month, doy_sin, doy_cos, weekend, holiday, workingday]
+  trend: [t]            # 経過日数
+  # atemp_c(体感温度)は temp_c と相関≒1 のため除外(寄与の分裂と非現実的な What-if を避ける)
+  exog: [temp_c, hum_pct, wind_kmh, weathersit]
+  # lag_365 は使わない(2年分しかなく、入れると訓練期間が約7か月に減る)
+
+# STL 季節成分との比較に使うカレンダー特徴量の内訳
+calendar_parts:
+  weekly: [weekday, weekend, holiday, workingday]
+  annual: [month, doy_sin, doy_cos]
+
+groups:                 # 生成した特徴量の所属グループ名(図・表に出す名前)
+  ar: 自己回帰(AR)
+  calendar: カレンダー
+  trend: トレンド
+  exog: 外生変数
+
+descriptions:
+  lag_1: 前日の利用数
+  lag_7: 7日前(前週同曜日)の利用数
+  lag_14: 14日前の利用数
+  lag_28: 28日前の利用数
+  roll7_mean: 直近7日(前日まで)の平均利用数
+  roll7_std: 直近7日(前日まで)の利用数の標準偏差
+  roll28_mean: 直近28日(前日まで)の平均利用数
+  roll28_std: 直近28日(前日まで)の利用数の標準偏差
+  weekday: 曜日(0=日 … 6=土)
+  month: 月
+  doy_sin: 年内通算日の sin(年周期)
+  doy_cos: 年内通算日の cos(年周期)
+  weekend: 土日フラグ
+  holiday: 祝日フラグ
+  t: 経過日数(2011-01-01 = 0)
+  temp_c: 気温(℃)
+  hum_pct: 湿度(%)
+  wind_kmh: 風速(km/h)
+  weathersit: 天候(1=晴れ/曇り, 2=霧/曇天, 3=小雨/小雪, 4=荒天)
+  workingday: 作業日フラグ(土日・祝日以外 = 1)
+
+naive:                  # 比較用 Naive 予測: 名前 → 何日前の実績を使うか
+  Naive(前日値): 1
+  Naive(前週同曜日): 7
+
+# 目的変数の変換候補(精度比較表に並べる)
+#   none : cnt そのもの
+#   log  : log1p(cnt)。SHAP は対数スケールで加法 → 元スケールでは乗法(%)
+#   level: cnt − roll7_mean。直近水準からの乖離を学習。予測 = roll7_mean + モデル出力(元スケールで加法)
+target_transforms: [none, log, level]
+# 説明に使う変換(フェーズ1の比較で決定: CV-RMSE 最良・訓練範囲外の水準も予測でき・元スケールで加法)
+explain_transform: level
+level_name: 直近水準(roll7_mean − 訓練平均)   # level 変換のオフセットを AR グループの擬似特徴量として扱う
+
+# 代表日(テスト期間から選ぶ)。kind: pred_max / pred_min / diff_max / diff_min / error_max
+representatives:
+  予測が最も高い日: pred_max
+  予測が最も低い日: pred_min
+  前日比で予測が最も上昇した日: diff_max
+  前日比で予測が最も下落した日: diff_min
+  参考_誤差が最大の日: error_max
+
+# 変化の要因分解の比較時点(日数)
+delta_lags:
+  前日比: 1
+  前週同曜日比: 7
+  前年同期比(52週前・同曜日): 364
+delta_top_n: 10
+
+# What-if(外生変数のみ)。変更は {特徴量: [種類, 量]}、種類は abs(元の単位で加算)/ sd / pct
+whatif:
+  bounds_quantiles: [0.01, 0.99]
+  single:
+    気温+5℃: {temp_c: [abs, 5]}
+    湿度−10pt: {hum_pct: [abs, -10]}
+    風速+10km/h: {wind_kmh: [abs, 10]}
+    天候1段階悪化: {weathersit: [abs, 1]}
+  multi:
+    "S1 気温+5℃×湿度−10pt": {temp_c: [abs, 5], hum_pct: [abs, -10]}
+    "S2 天候悪化×風速+10km/h": {weathersit: [abs, 1], wind_kmh: [abs, 10]}
+    "S3 気温−5℃×天候悪化": {temp_c: [abs, -5], weathersit: [abs, 1]}
+  period:               # テスト期間の全日に適用
+    "P1 気温+2℃": {temp_c: [abs, 2]}
+    "P2 気温+5℃×湿度−10pt": {temp_c: [abs, 5], hum_pct: [abs, -10]}
+  # 片方だけ動かすと非現実的になりうる組み合わせ(注記用)
+  correlated_pairs: [[temp_c, doy_cos], [temp_c, month], [hum_pct, weathersit]]
+
+group_colors:
+  自己回帰(AR): "#4C72B0"
+  カレンダー: "#DD8452"
+  トレンド: "#8C8C8C"
+  外生変数: "#55A868"
+
+model:
+  lgbm:
+    grid:
+      num_leaves: [7, 15, 31]
+      n_estimators: [200, 500]
+      learning_rate: [0.03]
+      min_child_samples: [10, 20]
+    fixed:
+      verbose: -1
+      deterministic: true
+      force_row_wise: true
+  ridge:
+    grid:
+      alpha: [0.1, 1.0, 10.0, 100.0, 300.0, 1000.0, 3000.0]
