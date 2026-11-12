@@ -147,12 +147,18 @@ def describe(interface: str) -> str:
     """I/F 名から docstring 1行目を引く(表の説明欄用)。"""
     import importlib
 
-    module, _, attr = interface.rpartition(".")
-    if not module:  # 「アプリ側で作成」など I/F 名でないもの
+    parts = interface.split(".")
+    if len(parts) < 2 or " " in interface:  # 「アプリ側で作成」など I/F 名でないもの
         return ""
-    for name in (f"src.{module}", module):  # interface_name は "src." を外しているので先に補って探す
-        try:
-            return _summary(getattr(importlib.import_module(name), attr))
-        except (ImportError, AttributeError):
-            continue
+    # モジュールと属性の境目を後ろからずらして探す(ShapAnalyzer.explain のようなメソッドにも対応)
+    for cut in range(len(parts) - 1, 0, -1):
+        module, attrs = ".".join(parts[:cut]), parts[cut:]
+        for name in (f"src.{module}", module):  # interface_name は "src." を外しているので先に補う
+            try:
+                obj = importlib.import_module(name)
+                for a in attrs:
+                    obj = getattr(obj, a)
+                return _summary(obj)
+            except (ImportError, AttributeError):
+                continue
     return ""

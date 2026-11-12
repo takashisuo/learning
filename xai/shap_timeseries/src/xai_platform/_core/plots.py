@@ -29,6 +29,9 @@ def _save(fig, path: Path) -> Path:
     return path
 
 
+save_figure = _save  # アプリ側で独自の図を保存するとき用(公開名)
+
+
 def _japanize_shap_axes(fig, xlabel: str | None = None, colorbar: str | None = None) -> None:
     """shap が付ける英語ラベルを日本語に差し替える。"""
     fig.canvas.draw()  # 目盛ラベルの文字列を確定させる
@@ -53,11 +56,16 @@ def _colors(names, colors: dict[str, str] | None):
 @produces_figure(shap_api="shap.plots.waterfall")
 def waterfall(sv_row: shap.Explanation, title: str, path: Path, unit: Unit = Unit(),
               max_display: int = 10) -> Path:
-    """1サンプルの予測値を「ベースライン + 各特徴量の寄与」に分解したウォーターフォール図。"""
+    """1サンプルの予測値を「ベースライン + 各特徴量の寄与」に分解したウォーターフォール図。
+
+    shap が付ける E[f(X)]・f(x) のラベルは変えられないので、2行目に値と意味を書く。
+    """
+    base = float(np.ravel(sv_row.base_values)[0])
+    pred = base + float(sv_row.values.sum())
     shap.plots.waterfall(sv_row, max_display=max_display, show=False)
     fig = plt.gcf()
-    fig.axes[0].set_title(title + "\n下端 E[f(X)] = ベースライン(訓練データの平均予測)、"
-                          "上端 f(x) = 予測値", fontsize=11, pad=28)
+    fig.axes[0].set_title(f"{title}\n下端 E[f(X)] = ベースライン {unit.fmt(base)}(訓練データの平均予測)、"
+                          f"上端 f(x) = 予測値 {unit.fmt(pred)}", fontsize=11, pad=28)
     fig.axes[0].set_xlabel(f"予測値への寄与の積み上げ({unit.axis})", labelpad=22)
     return _save(fig, path)
 
@@ -271,4 +279,118 @@ def group_stack_sorted(group_df: pd.DataFrame, pred: np.ndarray, base: float, pa
     ax.set_ylabel(f"予測値({unit.axis})")
     ax.set_title(title)
     ax.legend(fontsize=8, ncol=4, loc="upper left")
+    return _save(fig, path)
+
+
+# ---------------------------------------------------------------- グループ単位・行の並びに沿った図
+def _group_colors(groups, colors: dict[str, str] | None) -> dict:
+    cmap = plt.get_cmap("tab10")
+    return {g: (colors or {}).get(g, cmap(k % 10)) for k, g in enumerate(groups)}
+
+
+@produces_figure()
+def steps_waterfall(start_label: str, start: float, steps: pd.Series, end_label: str,
+                    title: str, path: Path, unit: Unit = Unit(),
+                    note: str | None = None) -> Path:
+    """「始点 + 各ステップ = 終点」の横向きウォーターフォール(グループ単位の分解・Δ分解に使う)。"""
+    labels = [start_label] + list(steps.index) + [end_label]
+    end = start + steps.sum()
+    fig, ax = plt.subplots(figsize=(9, 0.55 * len(labels) + 1.6))
+    y = np.arange(len(labels))[::-1]
+    ax.barh(y[0], start, color="#bbbbbb")
+    ax.text(start, y[0], f" {unit.fmt(start)}", va="center", fontsize=9)
+    cum = start
+    for k, (g, v) in enumerate(steps.items(), start=1):
+        ax.barh(y[k], v, left=cum, color="#d6604d" if v >= 0 else "#4393c3")
+        ax.text(max(cum, cum + v), y[k], f" {unit.fmt(v, True)}", va="center", fontsize=9)
+        ax.plot([cum + v] * 2, [y[k] - 0.4, y[k] - 0.6], color="gray", lw=0.8)
+        cum += v
+    ax.barh(y[-1], end, color="#444444")
+    ax.text(end, y[-1], f" {unit.fmt(end)}", va="center", fontsize=9, fontweight="bold")
+    ax.set_yticks(y, labels)
+    lo = min(0, start, end, *(start + steps.cumsum()))
+    hi = max(start, end, *(start + steps.cumsum()))
+    ax.set_xlim(lo, hi + (hi - lo) * 0.18)
+    ax.set_xlabel(unit.label)
+    ax.set_title(title, fontsize=11)
+    if note:
+        ax.text(0, -0.12, note, transform=ax.transAxes, fontsize=8, color="#555", va="top")
+    return _save(fig, path)
+
+
+@produces_figure()
+def stacked_contributions(ts: pd.DataFrame, groups: list[str], path: Path, title: str,
+                          unit: Unit = Unit(), colors: dict[str, str] | None = None,
+                          marker=None, marker_label: str = "") -> Path:
+    """ベースラインから正の寄与を上に、負の寄与を下に積み上げた面グラフ + 実測・予測の線。
+
+    ts は decompose.contribution_table の出力(index = 時点)。marker を指定するとその位置に縦線を引く。
+    """
+    cols = _group_colors(groups, colors)
+    base = float(ts["ベースライン"].iloc[0])
+    x = ts.index
+    fig, ax = plt.subplots(figsize=(13, 5.5))
+    pos = np.full(len(ts), base)
+    neg = np.full(len(ts), base)
+    for g in groups:
+        v = ts[g].to_numpy()
+        p, n = np.clip(v, 0, None), np.clip(v, None, 0)
+        ax.fill_between(x, pos, pos + p, color=cols[g], alpha=0.75, lw=0, label=g, step="mid")
+        ax.fill_between(x, neg, neg + n, color=cols[g], alpha=0.75, lw=0, step="mid")
+        pos, neg = pos + p, neg + n
+    ax.axhline(base, color="k", ls="--", lw=1, label=f"ベースライン {unit.fmt(base)}")
+    if "実測値" in ts.columns:
+        ax.plot(x, ts["実測値"], color="k", lw=0.9, label="実測値")
+    ax.plot(x, ts["予測値"], color="#d62728", lw=1.2, label="予測値 = ベースライン + Σ寄与")
+    if marker is not None:
+        ax.axvline(marker, color="gray", lw=1)
+        ax.text(marker, ax.get_ylim()[1], f" {marker_label}", va="top", fontsize=9, color="gray")
+    ax.set_ylabel(unit.label)
+    ax.set_title(title)
+    ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.07), fontsize=8, ncol=7, frameon=False)
+    return _save(fig, path)
+
+
+@produces_figure()
+def profile_heatmap(df: pd.DataFrame, path: Path, title: str, unit: Unit = Unit()) -> Path:
+    """行 = 季節/月/曜日、列 = グループ の平均寄与のヒートマップ(赤 = 押し上げ、青 = 押し下げ)。"""
+    m = df.to_numpy(float)
+    lim = np.abs(m).max()
+    fig, ax = plt.subplots(figsize=(1.6 * df.shape[1] + 2, 0.42 * df.shape[0] + 1.6))
+    im = ax.imshow(m, cmap="RdBu_r", vmin=-lim, vmax=lim, aspect="auto")
+    ax.set_xticks(range(df.shape[1]), df.columns)
+    ax.set_yticks(range(df.shape[0]), df.index)
+    for i in range(m.shape[0]):
+        for j in range(m.shape[1]):
+            ax.text(j, i, unit.fmt(m[i, j], True), ha="center", va="center", fontsize=8,
+                    color="white" if abs(m[i, j]) > lim * 0.6 else "black")
+    fig.colorbar(im, ax=ax, label=f"平均寄与({unit.label})")
+    ax.set_ylabel(df.index.name or "")
+    ax.set_title(title)
+    return _save(fig, path)
+
+
+@produces_figure()
+def period_whatif(daily: pd.DataFrame, by_period: pd.DataFrame | None, path: Path, title: str,
+                  unit: Unit = Unit()) -> Path:
+    """全行にシナリオを適用したときの行別Δ予測値(と期間別平均)。入力は whatif.period_analysis。"""
+    if by_period is None:
+        fig, ax0 = plt.subplots(figsize=(11, 4.2))
+        axes = [ax0]
+    else:
+        fig, axes = plt.subplots(1, 2, figsize=(14, 4.2), gridspec_kw={"width_ratios": [3, 1.3]})
+    for c in daily.columns:
+        axes[0].plot(daily.index, daily[c], lw=1, label=c)
+    axes[0].axhline(0, color="k", lw=0.8)
+    axes[0].set_ylabel(f"Δ予測値({unit.label})")
+    axes[0].set_title("日別のΔ予測値(モデル再予測)", fontsize=11)
+    axes[0].legend(fontsize=8)
+    if by_period is not None:
+        by_period.plot.bar(ax=axes[1], rot=0)
+        axes[1].axhline(0, color="k", lw=0.8)
+        axes[1].set_ylabel(f"1日平均Δ予測値({unit.label})")
+        axes[1].set_title("期間別の平均Δ予測値", fontsize=11)
+        axes[1].legend(fontsize=7)
+    fig.suptitle(title)
+    fig.tight_layout()
     return _save(fig, path)

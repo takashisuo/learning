@@ -1,48 +1,29 @@
-"""時間方向の分解(グループ別寄与の時系列・季節/曜日プロファイル・STL 比較)と、
-前日比/前週比/前年同期比の変化の要因分解(ΔSHAP)。
+"""このデータ固有の時間方向の処理: 季節/月/曜日のキー・STL 比較・比較時点(前日/前週/前年)ごとの差の分解。
+
+グループ別寄与の集約・2時点の差の分解そのものは ShapAnalyzer(xai_platform)が行う。
 """
 from __future__ import annotations
 
-import numpy as np
 import pandas as pd
 from statsmodels.tsa.seasonal import MSTL
 
 from .explain import WEEKDAY_JA, date_label
-from .xai_platform.provenance import produces_table
+from .xai_platform import ShapAnalyzer, produces_table
 
 SEASON_JA = {12: "冬", 1: "冬", 2: "冬", 3: "春", 4: "春", 5: "春",
              6: "夏", 7: "夏", 8: "夏", 9: "秋", 10: "秋", 11: "秋"}
 
 
-# ---------------------------------------------------------------- 時間方向の構成
-@produces_table
-def contribution_timeseries(group_df: pd.DataFrame, base: float, pred: pd.Series,
-                            y: pd.Series) -> pd.DataFrame:
-    """日付ごとの ベースライン + グループ別寄与 = 予測値(と実測値)。"""
-    out = group_df.copy()
-    out.insert(0, "ベースライン", base)
-    out["予測値"] = pred
-    out["実測値"] = y.reindex(out.index)
-    assert np.allclose(out["ベースライン"] + group_df.sum(axis=1), out["予測値"], atol=1e-6)
-    return out
-
-
-@produces_table
-def profile_table(group_df: pd.DataFrame, by: str) -> pd.DataFrame:
-    """季節・月・曜日ごとのグループ別平均寄与。by は season / month / weekday。"""
-    idx = group_df.index
+# ---------------------------------------------------------------- 区分のキー
+def calendar_keys(index: pd.DatetimeIndex, by: str) -> tuple[object, str]:
+    """ShapAnalyzer.profile に渡す (行ごとのキー, キー名)。by は season / month / weekday。"""
     if by == "season":
-        key = pd.Categorical(idx.month.map(SEASON_JA), ["春", "夏", "秋", "冬"])
-    elif by == "month":
-        key = pd.Index(idx.month, name="月")
-    elif by == "weekday":
-        key = pd.Categorical([WEEKDAY_JA[(d + 1) % 7] for d in idx.dayofweek], WEEKDAY_JA)
-    else:
-        raise ValueError(by)
-    out = group_df.groupby(key, observed=True).mean()
-    out["日数"] = group_df.groupby(key, observed=True).size()
-    out.index.name = {"season": "季節", "month": "月", "weekday": "曜日"}[by]
-    return out
+        return pd.Categorical(index.month.map(SEASON_JA), ["春", "夏", "秋", "冬"]), "季節"
+    if by == "month":
+        return pd.Index(index.month, name="月"), "月"
+    if by == "weekday":
+        return pd.Categorical([WEEKDAY_JA[(d + 1) % 7] for d in index.dayofweek], WEEKDAY_JA), "曜日"
+    raise ValueError(by)
 
 
 # ---------------------------------------------------------------- STL との比較
@@ -66,7 +47,7 @@ def stl_comparison(stl: pd.DataFrame, feat_df: pd.DataFrame, group_df: pd.DataFr
     idx = feat_df.index
     wk = pd.DataFrame({"STL 週周期成分": stl.loc[idx, "週周期"],
                        "カレンダー寄与(週内訳)": feat_df[parts["weekly"]].sum(axis=1)})
-    wk_key = pd.Categorical([WEEKDAY_JA[(d + 1) % 7] for d in idx.dayofweek], WEEKDAY_JA)
+    wk_key, _ = calendar_keys(idx, "weekday")
     weekly = wk.groupby(wk_key, observed=True).mean()
     weekly = weekly - weekly.mean()
     weekly.index.name = "曜日"
@@ -81,28 +62,14 @@ def stl_comparison(stl: pd.DataFrame, feat_df: pd.DataFrame, group_df: pd.DataFr
     return weekly, annual
 
 
-# ---------------------------------------------------------------- 変化の要因分解
-@produces_table
-def delta_decomposition(ts: pd.DataFrame, groups: list[str], lag: int,
-                        dates: pd.Index) -> pd.DataFrame:
-    """予測値(t) − 予測値(t−lag) = Σ_グループ [寄与(t) − 寄与(t−lag)]。ベースラインは差で消える。
-
-    ts は contribution_timeseries の出力(t−lag の日も含む期間で計算しておく)。
-    """
-    rows = []
-    for t in dates:
-        s = t - pd.Timedelta(days=lag)
-        if s not in ts.index:
-            continue
-        d = ts.loc[t, groups] - ts.loc[s, groups]
-        rows.append({"日付": t, "比較日": s, "予測値(比較日)": ts.loc[s, "予測値"],
-                     "予測値(当日)": ts.loc[t, "予測値"],
-                     "Δ予測値": ts.loc[t, "予測値"] - ts.loc[s, "予測値"],
-                     **{f"Δ{g}": v for g, v in d.items()}, "ΣΔ寄与": d.sum(),
-                     "Δ実測値": ts.loc[t, "実測値"] - ts.loc[s, "実測値"]})
-    out = pd.DataFrame(rows).set_index("日付")
-    out["恒等式の誤差"] = (out["Δ予測値"] - out["ΣΔ寄与"]).abs()
-    return out
+# ---------------------------------------------------------------- 比較時点ごとの差の分解
+def delta_decomposition(az: ShapAnalyzer, lag: int, dates: pd.Index) -> pd.DataFrame:
+    """各日 t と t−lag 日の差の分解(ShapAnalyzer.compare_table を日付で呼ぶ)。"""
+    pairs = [(t, t - pd.Timedelta(days=lag)) for t in dates]
+    out = az.compare_table(pairs)
+    out.index.name = "日付"
+    return out.rename(columns={"比較対象": "比較日", "予測値(比較対象)": "予測値(比較日)",
+                               "予測値(対象)": "予測値(当日)"})
 
 
 def main_driver(row: pd.Series, groups: list[str]) -> str:

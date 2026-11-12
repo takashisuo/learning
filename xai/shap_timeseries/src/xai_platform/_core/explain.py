@@ -206,3 +206,9 @@ def dependence_table(sv: shap.Explanation, feature: str, n_bins: int = 10,
     out = out.reset_index()
     out["値の範囲"] = [f"{iv.left:.4g} – {iv.right:.4g}" for iv in out["値の範囲"]]
     return out
+
+
+@produces_table
+def description_table(descriptions: dict[str, str]) -> pd.DataFrame:
+    """特徴量名 → 説明 の辞書を表にする。"""
+    return pd.DataFrame({"特徴量": list(descriptions), "説明": list(descriptions.values())})

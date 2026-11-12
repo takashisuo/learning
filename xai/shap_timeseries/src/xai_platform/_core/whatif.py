@@ -143,3 +143,55 @@ def scenario_analysis(model, explainer, x: pd.Series, sd: pd.Series, bounds: pd.
         change_rows += [{"シナリオ": name, **e} for e in log]
     dshap = pd.DataFrame(dshap_rows, index=x.index).T
     return pd.DataFrame(summary), dshap, pd.DataFrame(change_rows)
+
+
+# ---------------------------------------------------------------- 複数行(期間全体)への適用
+def apply_changes_frame(X: pd.DataFrame, changes: Scenario, sd: pd.Series,
+                        bounds: pd.DataFrame) -> tuple[pd.DataFrame, pd.Series]:
+    """全行に変更を適用し bounds にクリップする。返り値の2つ目はクリップが起きた行のフラグ。"""
+    new = X.copy()
+    clipped = pd.Series(False, index=X.index)
+    for f, (kind, amount) in changes.items():
+        req = X[f] + np.array([resolve_delta(kind, amount, v, sd[f]) for v in X[f]])
+        lo, hi = bounds.loc[f].iloc[0], bounds.loc[f].iloc[1]
+        new[f] = req.clip(lo, hi)
+        clipped |= ~np.isclose(req, new[f])
+    return new, clipped
+
+
+@produces_table
+def period_analysis(predict, shap_values, X: pd.DataFrame, scenarios: dict[str, Scenario],
+                    sd: pd.Series, bounds: pd.DataFrame, freq: str | None = None,
+                    tol: float = 1e-6
+                    ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame | None, pd.DataFrame]:
+    """全行にシナリオを適用したときの総量の変化(summary / 行別Δ / 期間別平均Δ / 特徴量別平均ΔSHAP)。
+
+    predict(X) は予測値、shap_values(X) は SHAP 値の配列を返す関数。Δ予測値 = ΣΔSHAP を確認する。
+    freq を指定すると(index が日時のとき)その期間ごとの平均Δも返す(例: "M")。
+    """
+    p0 = predict(X)
+    sv0 = shap_values(X)
+    summary, daily, dshap = [], {}, {}
+    for name, changes in scenarios.items():
+        new, clipped = apply_changes_frame(X, changes, sd, bounds)
+        d = predict(new) - p0
+        ds = shap_values(new) - sv0
+        assert np.allclose(d, ds.sum(axis=1), atol=tol), "Δ予測値 ≠ ΣΔSHAP"
+        singles = sum(predict(apply_changes_frame(X, {f: c}, sd, bounds)[0]) - p0
+                      for f, c in changes.items())
+        daily[name] = pd.Series(d, index=X.index)
+        dshap[name] = pd.Series(ds.mean(axis=0), index=X.columns)
+        summary.append({"シナリオ": name, "日数": len(X),
+                        "元の予測の合計": p0.sum(), "Δ予測値の合計": d.sum(),
+                        "Δ予測値の合計(%)": d.sum() / p0.sum() * 100,
+                        "1日平均Δ": d.mean(), "1日Δの最小": d.min(), "1日Δの最大": d.max(),
+                        "単独Δの合計の1日平均": np.mean(singles),
+                        "相互作用分の1日平均": np.mean(d - singles),
+                        "クリップした日数": int(clipped.sum())})
+    daily = pd.DataFrame(daily)
+    by_period = None
+    if freq is not None:
+        by_period = daily.groupby(daily.index.to_period(freq)).mean()
+        by_period.index = by_period.index.astype(str)
+        by_period.index.name = "期間"
+    return pd.DataFrame(summary).set_index("シナリオ"), daily, by_period, pd.DataFrame(dshap)

@@ -13,7 +13,7 @@ from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 
 from .data import cv_splitter
-from .xai_platform.provenance import produces_table
+from .xai_platform import produces_table
 
 LEVEL_FEATURE = "roll7_mean"  # level 変換で差し引く「直近水準」
 
